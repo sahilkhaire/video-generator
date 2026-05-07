@@ -1,5 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { promises as fs } from 'fs';
 import { IScriptGenerator, IVideoScript } from '../../domain/interfaces/script-generator.interface';
 import {
   IImageGenerator,
@@ -128,8 +129,15 @@ export class ContentService {
     const cacheKey = this.cacheKeyService.forAudio(request);
     const cached = await this.contentCacheService.get<IGeneratedAudio>(cacheKey);
     if (cached) {
-      this.logger.debug(`Audio cache hit: ${cacheKey}`);
-      return cached;
+      if (await this.fileExists(cached.filePath)) {
+        this.logger.debug(`Audio cache hit: ${cacheKey}`);
+        return cached;
+      }
+
+      this.logger.warn(
+        `Audio cache stale (file missing), evicting key ${cacheKey}: ${cached.filePath}`,
+      );
+      await this.contentCacheService.del(cacheKey);
     }
 
     const start = Date.now();
@@ -270,5 +278,15 @@ export class ContentService {
 
   getTtsVoices(): Promise<ITTSVoice[]> {
     return this.ttsProvider.getVoices();
+  }
+
+  private async fileExists(filePath: string | undefined): Promise<boolean> {
+    if (!filePath) return false;
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

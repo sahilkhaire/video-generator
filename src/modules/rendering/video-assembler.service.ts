@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import ffmpeg = require('fluent-ffmpeg');
 import * as ffmpegStatic from 'ffmpeg-static';
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { isAbsolute, join, resolve } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { IComposedFrame, IRenderedVideo } from '../../domain/interfaces/rendering.interface';
 import { IGeneratedAudio } from '../../domain/interfaces/tts-provider.interface';
@@ -30,6 +30,7 @@ export class VideoAssemblerService {
 
   async assembleVideo(options: IAssembleVideoOptions): Promise<IRenderedVideo> {
     const { frames, audioTracks, fps } = options;
+    const totalDuration = frames.reduce((sum, f) => sum + f.duration, 0);
 
     if (frames.length === 0) {
       throw new Error('Cannot assemble video: no frames provided');
@@ -37,12 +38,18 @@ export class VideoAssemblerService {
 
     this.logger.log(`Assembling video: ${frames.length} frames at ${fps} fps`);
 
-    const tempDir = this.configService.get<string>('video.storage.tempPath', './temp');
-    const outputDir = this.configService.get<string>('video.storage.localPath', './storage');
+    const tempDir = this.toAbsolutePath(
+      this.configService.get<string>('video.storage.tempPath', './temp'),
+    );
+    const outputDir = this.toAbsolutePath(
+      this.configService.get<string>('video.storage.localPath', './storage'),
+    );
     await fs.mkdir(outputDir, { recursive: true });
     await fs.mkdir(tempDir, { recursive: true });
 
-    const outputPath = options.outputPath ?? join(outputDir, `video-${uuidv4()}.mp4`);
+    const outputPath = this.toAbsolutePath(
+      options.outputPath ?? join(outputDir, `video-${uuidv4()}.mp4`),
+    );
 
     // Step 1: Build a concat file listing each frame with its duration
     const concatFilePath = join(tempDir, `concat-${uuidv4()}.txt`);
@@ -59,14 +66,13 @@ export class VideoAssemblerService {
       fps,
       frames[0].width,
       frames[0].height,
+      totalDuration,
     );
 
     // Step 4: Cleanup temp files
     await this.cleanupTemp([concatFilePath, ...(mergedAudioPath ? [mergedAudioPath] : [])]);
 
     const stats = await fs.stat(outputPath);
-    const totalDuration = frames.reduce((sum, f) => sum + f.duration, 0);
-
     this.logger.log(`Video assembled: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
 
     return {
@@ -83,11 +89,14 @@ export class VideoAssemblerService {
   private async writeConcatFile(concatFilePath: string, frames: IComposedFrame[]): Promise<void> {
     const lines = frames
       .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
-      .flatMap((frame) => [`file '${frame.framePath}'`, `duration ${frame.duration}`]);
+      .flatMap((frame) => [
+        `file '${this.escapeForConcat(this.toAbsolutePath(frame.framePath))}'`,
+        `duration ${frame.duration}`,
+      ]);
 
     // FFmpeg concat demuxer requires duplicating the last frame line
     const lastFrame = frames[frames.length - 1];
-    lines.push(`file '${lastFrame.framePath}'`);
+    lines.push(`file '${this.escapeForConcat(this.toAbsolutePath(lastFrame.framePath))}'`);
 
     await fs.writeFile(concatFilePath, lines.join('\n'));
   }
@@ -96,19 +105,30 @@ export class VideoAssemblerService {
     audioTracks: Array<{ sceneId: string; audio?: IGeneratedAudio }>,
     tempDir: string,
   ): Promise<string | null> {
-    const validTracks = audioTracks.filter((t) => t.audio?.filePath).map((t) => t.audio!.filePath);
+    const candidateTracks = audioTracks
+      .filter((t) => t.audio?.filePath)
+      .map((t) => this.toAbsolutePath(t.audio!.filePath));
 
-    if (validTracks.length === 0) return null;
-    if (validTracks.length === 1) return validTracks[0];
+    const existingTracks: string[] = [];
+    for (const trackPath of candidateTracks) {
+      if (await this.fileExists(trackPath)) {
+        existingTracks.push(trackPath);
+      } else {
+        this.logger.warn(`Skipping missing audio track: ${trackPath}`);
+      }
+    }
 
-    const mergedPath = join(tempDir, `audio-merged-${uuidv4()}.mp3`);
+    if (existingTracks.length === 0) return null;
+    if (existingTracks.length === 1) return existingTracks[0];
+
+    const mergedPath = this.toAbsolutePath(join(tempDir, `audio-merged-${uuidv4()}.mp3`));
 
     await new Promise<void>((resolve, reject) => {
       const cmd = ffmpeg();
-      validTracks.forEach((track) => cmd.input(track));
+      existingTracks.forEach((track) => cmd.input(track));
 
       cmd
-        .complexFilter([`concat=n=${validTracks.length}:v=0:a=1[out]`])
+        .complexFilter([`concat=n=${existingTracks.length}:v=0:a=1[out]`])
         .outputOptions(['-map [out]'])
         .output(mergedPath)
         .on('end', () => resolve())
@@ -126,10 +146,11 @@ export class VideoAssemblerService {
     fps: number,
     width: number,
     height: number,
+    totalDuration: number,
   ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       const cmd = ffmpeg()
-        .input(concatFilePath)
+        .input(this.toAbsolutePath(concatFilePath))
         .inputOptions(['-f concat', '-safe 0'])
         .videoCodec('libx264')
         .outputOptions([
@@ -139,16 +160,18 @@ export class VideoAssemblerService {
           '-preset fast',
           '-crf 23',
           '-movflags +faststart',
+          `-t ${totalDuration}`,
         ]);
 
       if (audioPath) {
-        cmd.input(audioPath).audioCodec('aac').outputOptions(['-shortest']);
+        // Pad audio with silence when it is shorter than the frame timeline.
+        cmd.input(this.toAbsolutePath(audioPath)).audioCodec('aac').outputOptions(['-af apad']);
       } else {
         cmd.outputOptions(['-an']); // no audio
       }
 
       cmd
-        .output(outputPath)
+        .output(this.toAbsolutePath(outputPath))
         .on('start', (cmdLine: string) => this.logger.debug(`FFmpeg started: ${cmdLine}`))
         .on('progress', (progress: { percent?: number }) => {
           if (progress.percent) {
@@ -187,5 +210,23 @@ export class VideoAssemblerService {
 
     this.logger.warn('ffmpeg-static path not found; falling back to system ffmpeg command');
     return 'ffmpeg';
+  }
+
+  private toAbsolutePath(filePath: string): string {
+    return isAbsolute(filePath) ? filePath : resolve(filePath);
+  }
+
+  private escapeForConcat(filePath: string): string {
+    // FFmpeg concat uses single-quoted paths; embedded single quotes must be escaped.
+    return filePath.replace(/'/g, "'\\''");
+  }
+
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
