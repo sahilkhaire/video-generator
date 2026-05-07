@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Video Studio Console</title>
+  <link rel="stylesheet" href="/api/ui/assets/playground.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="side">
+      <div class="brand">
+        <h1>Video Studio Console</h1>
+        <p>Optional control panel for generation runs and diagnostics.</p>
+      </div>
+      <nav class="menu" id="menu">
+        <button data-target="sec-generate" class="active">Generate Video</button>
+        <button data-target="sec-voices">Voices & Providers</button>
+        <button data-target="sec-jobs">Job Tracking</button>
+        <button data-target="sec-mongo">MongoDB Details</button>
+        <button data-target="sec-output">Response Output</button>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <section class="hero">
+        <h2>Production Playground</h2>
+        <p>Everything in one place: presets, provider checks, Indian voice selection, and status polling.</p>
+        <div class="chips">
+          <span class="chip">Route: /api/ui</span>
+          <span class="chip">Uses /api/videos/* endpoints</span>
+          <span class="chip">Indian voices prioritized</span>
+        </div>
+      </section>
+
+      <section class="panel" id="sec-generate">
+        <h3>Generate Video</h3>
+        <div class="grid">
+          <div class="field full">
+            <label for="apiKey">API Key (optional)</label>
+            <input id="apiKey" placeholder="x-api-key header value" />
+          </div>
+
+          <div class="field full">
+            <label for="samplePreset">Preset</label>
+            <select id="samplePreset"></select>
+          </div>
+
+          <div class="field full">
+            <label for="topic">Topic</label>
+            <textarea id="topic" required></textarea>
+          </div>
+
+          <div class="field">
+            <label for="platform">Platform</label>
+            <select id="platform">
+              <option value="youtube">youtube</option>
+              <option value="instagram_reels">instagram_reels</option>
+              <option value="tiktok">tiktok</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="style">Style</label>
+            <select id="style">
+              <option value="cartoon">cartoon</option>
+              <option value="realistic">realistic</option>
+              <option value="animated">animated</option>
+              <option value="cinematic">cinematic</option>
+              <option value="minimal">minimal</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="targetDuration">Duration (seconds)</label>
+            <input id="targetDuration" type="number" min="15" max="600" value="45" />
+          </div>
+
+          <div class="field">
+            <label for="targetAudience">Target Audience</label>
+            <input id="targetAudience" placeholder="e.g. Indian startup founders" />
+          </div>
+
+          <div class="field">
+            <label for="resolution">Resolution</label>
+            <select id="resolution">
+              <option value="480p">480p</option>
+              <option value="720p">720p</option>
+              <option value="1080p">1080p</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="fps">FPS</label>
+            <input id="fps" type="number" min="24" max="60" value="30" />
+          </div>
+
+          <div class="field full">
+            <label for="additionalContext">Additional Context</label>
+            <textarea id="additionalContext" placeholder="Tone, pacing, CTA, and constraints..."></textarea>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px">
+          <button class="btn btn-primary" id="enqueueBtn">Enqueue Video Job</button>
+        </div>
+        <p id="requestStatus" class="status"></p>
+      </section>
+
+      <section class="panel" id="sec-voices">
+        <h3>Voices & Providers</h3>
+        <div class="grid">
+          <div class="field full">
+            <label for="voice">Voice Selection</label>
+            <div class="row">
+              <select id="voice" style="flex:1">
+                <option value="">Use Provider Default</option>
+              </select>
+              <button class="btn" id="loadVoicesBtn" type="button">Load Voices</button>
+              <button class="btn" id="providersBtn" type="button">Get Providers</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="sec-jobs">
+        <h3>Job Tracking</h3>
+        <div class="grid">
+          <div class="field full">
+            <label for="jobId">Job ID</label>
+            <div class="row">
+              <input id="jobId" placeholder="Paste jobId from enqueue response" style="flex:1" />
+              <button class="btn" id="jobStatusBtn">Get Job Status</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="sec-mongo">
+        <h3>MongoDB Details</h3>
+        <div class="grid">
+          <div class="field">
+            <label for="mongoJobLimit">Job records limit</label>
+            <input id="mongoJobLimit" type="number" min="1" max="500" value="50" />
+          </div>
+          <div class="field">
+            <label for="mongoCostLimit">Cost records limit</label>
+            <input id="mongoCostLimit" type="number" min="1" max="1000" value="100" />
+          </div>
+          <div class="field full">
+            <div class="row">
+              <button class="btn" id="mongoDetailsBtn" type="button">Load Mongo Details</button>
+              <span id="mongoSummary" class="status"></span>
+            </div>
+          </div>
+          <div class="field full">
+            <label>Recent Video Jobs</label>
+            <div class="table-wrap">
+              <table id="mongoJobsTable" class="data-table">
+                <thead>
+                  <tr>
+                    <th>Job ID</th>
+                    <th>Status</th>
+                    <th>Platform</th>
+                    <th>Progress</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td colspan="5">No data loaded yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="field full">
+            <label>Recent Cost Records</label>
+            <div class="table-wrap">
+              <table id="mongoCostTable" class="data-table">
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>Type</th>
+                    <th>Cost (USD)</th>
+                    <th>Duration (ms)</th>
+                    <th>Success</th>
+                    <th>Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td colspan="6">No data loaded yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="sec-output">
+        <h3>Response Output</h3>
+        <pre id="output">{ "message": "Ready" }</pre>
+      </section>
+    </main>
+  </div>
+
+  <script src="/api/ui/assets/playground.js"></script>
+</body>
+</html>

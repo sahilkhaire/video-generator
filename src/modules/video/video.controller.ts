@@ -4,6 +4,7 @@ import {
   Body,
   Get,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   NotFoundException,
@@ -18,6 +19,7 @@ import {
   IVideoJobStatusResponse,
 } from '../../domain/interfaces/video-job.interface';
 import { ITTSVoice } from '../../domain/interfaces/tts-provider.interface';
+import { IMongoDetailsResponse } from './video.service';
 
 interface IProvidersResponse {
   script: string;
@@ -86,5 +88,22 @@ export class VideoController {
   @ApiResponse({ status: 200, description: 'Voice list returned' })
   async getTtsVoices(): Promise<ITTSVoice[]> {
     return this.videoService.getTtsVoices();
+  }
+
+  @Get('mongo-details')
+  @ApiOperation({
+    summary: 'Get recent MongoDB details',
+    description:
+      'Returns recent video job documents and cost records from MongoDB for operational visibility.',
+  })
+  @ApiResponse({ status: 200, description: 'MongoDB details returned' })
+  async getMongoDetails(
+    @Query('jobLimit') jobLimit?: string,
+    @Query('costLimit') costLimit?: string,
+  ): Promise<IMongoDetailsResponse> {
+    const parsedJobLimit = Number(jobLimit ?? '50');
+    const parsedCostLimit = Number(costLimit ?? '100');
+
+    return this.videoService.getMongoDetails(parsedJobLimit, parsedCostLimit);
   }
 }

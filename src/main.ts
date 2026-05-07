@@ -21,7 +21,7 @@ async function bootstrap(): Promise<void> {
   // Security
   app.use(
     helmet({
-      // Keep strict defaults in production; relax CSP locally for the inline /api/ui playground assets.
+      // Keep strict defaults in production; relax CSP locally for optional inline playground assets.
       contentSecurityPolicy: environment === 'production' ? undefined : false,
     }),
   );

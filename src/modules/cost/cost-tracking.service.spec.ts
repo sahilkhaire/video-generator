@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CostTrackingService } from './cost-tracking.service';
 import { ContentType } from '../../domain/interfaces/cost-tracking.interface';
+import { CostRecordRepository } from '../database/repositories/cost-record.repository';
 
 const makeRecord = (
   overrides: Partial<{
@@ -22,10 +23,19 @@ const makeRecord = (
 
 describe('CostTrackingService', () => {
   let service: CostTrackingService;
+  let mockCostRecordRepository: { save: jest.Mock; deleteAll: jest.Mock };
 
   beforeEach(async () => {
+    mockCostRecordRepository = {
+      save: jest.fn().mockResolvedValue(undefined),
+      deleteAll: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [CostTrackingService],
+      providers: [
+        CostTrackingService,
+        { provide: CostRecordRepository, useValue: mockCostRecordRepository },
+      ],
     }).compile();
 
     service = module.get<CostTrackingService>(CostTrackingService);

@@ -4,6 +4,7 @@ import { VIDEO_QUEUE_TOKEN, VIDEO_JOB_NAME } from './constants/queue.constants';
 import { IVideoJobData, VideoJobStatus } from '../../domain/interfaces/video-job.interface';
 import { VideoPlatform, VideoStyle } from '../../domain/enums/video.enums';
 import { VideoResolution } from '../../domain/interfaces/rendering.interface';
+import { VideoJobRepository } from '../database/repositories/video-job.repository';
 
 const buildJobData = (): IVideoJobData => ({
   topic: 'How photosynthesis works in plants',
@@ -20,15 +21,27 @@ describe('QueueService', () => {
     add: jest.Mock;
     getJob: jest.Mock;
   };
+  let mockVideoJobRepository: {
+    create: jest.Mock;
+    findByJobId: jest.Mock;
+  };
 
   beforeEach(async () => {
     mockQueue = {
       add: jest.fn().mockResolvedValue({ id: 'test-job-id' }),
       getJob: jest.fn(),
     };
+    mockVideoJobRepository = {
+      create: jest.fn().mockResolvedValue(undefined),
+      findByJobId: jest.fn().mockResolvedValue(null),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [QueueService, { provide: VIDEO_QUEUE_TOKEN, useValue: mockQueue }],
+      providers: [
+        QueueService,
+        { provide: VIDEO_QUEUE_TOKEN, useValue: mockQueue },
+        { provide: VideoJobRepository, useValue: mockVideoJobRepository },
+      ],
     }).compile();
 
     service = module.get<QueueService>(QueueService);

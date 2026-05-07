@@ -5,6 +5,8 @@ import { GenerateVideoRequestDto } from '../../domain/dto/generate-video.dto';
 import { IRenderedVideo } from '../../domain/interfaces/rendering.interface';
 import { VideoResolution } from '../../domain/interfaces/rendering.interface';
 import { ITTSVoice } from '../../domain/interfaces/tts-provider.interface';
+import { VideoJobRepository } from '../database/repositories/video-job.repository';
+import { CostRecordRepository } from '../database/repositories/cost-record.repository';
 
 export interface IVideoGenerationResult {
   video: IRenderedVideo;
@@ -17,6 +19,33 @@ export interface IVideoGenerationResult {
   generatedAt: Date;
 }
 
+export interface IMongoDetailsResponse {
+  videoJobs: Array<{
+    jobId: string;
+    topic: string;
+    platform: string;
+    status: string;
+    progress: number;
+    createdAt: Date;
+    updatedAt: Date;
+    finishedAt?: Date;
+    error?: string;
+  }>;
+  costRecords: Array<{
+    recordId: string;
+    provider: string;
+    contentType: string;
+    estimatedCostUsd: number;
+    durationMs: number;
+    success: boolean;
+    timestamp: Date;
+  }>;
+  totals: {
+    videoJobs: number;
+    costRecords: number;
+  };
+}
+
 @Injectable()
 export class VideoService {
   private readonly logger = new Logger(VideoService.name);
@@ -24,6 +53,8 @@ export class VideoService {
   constructor(
     private readonly contentService: ContentService,
     private readonly renderingService: RenderingService,
+    private readonly videoJobRepository: VideoJobRepository,
+    private readonly costRecordRepository: CostRecordRepository,
   ) {}
 
   async generateVideo(request: GenerateVideoRequestDto): Promise<IVideoGenerationResult> {
@@ -68,5 +99,44 @@ export class VideoService {
 
   getTtsVoices(): Promise<ITTSVoice[]> {
     return this.contentService.getTtsVoices();
+  }
+
+  async getMongoDetails(jobLimit = 50, costLimit = 100): Promise<IMongoDetailsResponse> {
+    const normalizedJobLimit = Number.isFinite(jobLimit) ? jobLimit : 50;
+    const normalizedCostLimit = Number.isFinite(costLimit) ? costLimit : 100;
+    const safeJobLimit = Math.min(500, Math.max(1, Math.floor(normalizedJobLimit)));
+    const safeCostLimit = Math.min(1000, Math.max(1, Math.floor(normalizedCostLimit)));
+
+    const [jobs, costs] = await Promise.all([
+      this.videoJobRepository.findAll(safeJobLimit, 0),
+      this.costRecordRepository.findRecent(safeCostLimit, 0),
+    ]);
+
+    return {
+      videoJobs: jobs.map((job) => ({
+        jobId: job.jobId,
+        topic: job.topic,
+        platform: job.platform,
+        status: job.status,
+        progress: job.progress,
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt,
+        finishedAt: job.finishedAt,
+        error: job.error,
+      })),
+      costRecords: costs.map((record) => ({
+        recordId: record.recordId,
+        provider: record.provider,
+        contentType: record.contentType,
+        estimatedCostUsd: record.estimatedCostUsd,
+        durationMs: record.durationMs,
+        success: record.success,
+        timestamp: record.timestamp,
+      })),
+      totals: {
+        videoJobs: jobs.length,
+        costRecords: costs.length,
+      },
+    };
   }
 }

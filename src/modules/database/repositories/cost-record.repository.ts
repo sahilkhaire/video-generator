@@ -27,6 +27,10 @@ export class CostRecordRepository {
     return this.model.find().sort({ timestamp: -1 }).exec();
   }
 
+  async findRecent(limit = 100, skip = 0): Promise<CostRecordDocument[]> {
+    return this.model.find().sort({ timestamp: -1 }).skip(skip).limit(limit).exec();
+  }
+
   async findSince(since: Date): Promise<CostRecordDocument[]> {
     return this.model.find({ timestamp: { $gte: since } }).sort({ timestamp: -1 }).exec();
   }

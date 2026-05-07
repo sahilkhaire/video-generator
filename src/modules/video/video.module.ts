@@ -2,11 +2,12 @@ import { Module, forwardRef } from '@nestjs/common';
 import { ContentModule } from '../content/content.module';
 import { RenderingModule } from '../rendering/rendering.module';
 import { QueueModule } from '../queue/queue.module';
+import { DatabaseModule } from '../database/database.module';
 import { VideoService } from './video.service';
 import { VideoController } from './video.controller';
 
 @Module({
-  imports: [ContentModule, RenderingModule, forwardRef(() => QueueModule)],
+  imports: [ContentModule, RenderingModule, forwardRef(() => QueueModule), DatabaseModule],
   controllers: [VideoController],
   providers: [VideoService],
   exports: [VideoService],
