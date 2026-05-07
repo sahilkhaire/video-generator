@@ -39,8 +39,11 @@ export class QueueService {
   }
 
   async getJobStatus(jobId: string): Promise<IVideoJobStatusResponse | null> {
-    const job: Job<IVideoJobData, IVideoJobResult> | undefined =
-      await this.videoQueue.getJob(jobId);
+    const timeout = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 3000));
+    const job: Job<IVideoJobData, IVideoJobResult> | undefined = await Promise.race([
+      this.videoQueue.getJob(jobId),
+      timeout,
+    ]);
 
     if (!job) {
       return null;

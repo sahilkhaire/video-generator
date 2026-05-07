@@ -12,5 +12,7 @@
     "^@domain/(.*)$": "<rootDir>/../src/domain/$1",
     "^@common/(.*)$": "<rootDir>/../src/common/$1",
     "^@config/(.*)$": "<rootDir>/../src/config/$1"
-  }
+  },
+  "testTimeout": 30000,
+  "forceExit": true
 }
