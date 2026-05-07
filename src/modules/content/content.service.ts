@@ -1,4 +1,5 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { IScriptGenerator, IVideoScript } from '../../domain/interfaces/script-generator.interface';
 import {
   IImageGenerator,
@@ -9,6 +10,8 @@ import { GenerateScriptRequestDto } from '../../domain/dto/generate-script.dto';
 import { GenerateImageRequestDto } from '../../domain/dto/generate-image.dto';
 import { GenerateAudioRequestDto } from '../../domain/dto/generate-audio.dto';
 import { SCRIPT_GENERATOR, IMAGE_GENERATOR, TTS_PROVIDER } from './constants/injection-tokens';
+import { CostTrackingService } from '../cost/cost-tracking.service';
+import { ContentType } from '../../domain/interfaces/cost-tracking.interface';
 
 export interface ISceneAssets {
   sceneId: string;
@@ -36,18 +39,94 @@ export class ContentService {
     @Inject(SCRIPT_GENERATOR) private readonly scriptGenerator: IScriptGenerator,
     @Inject(IMAGE_GENERATOR) private readonly imageGenerator: IImageGenerator,
     @Inject(TTS_PROVIDER) private readonly ttsProvider: ITTSProvider,
+    private readonly configService: ConfigService,
+    private readonly costTrackingService: CostTrackingService,
   ) {}
 
+  private lookupCostRate(contentType: ContentType, providerName: string): number {
+    const key = `providers.costs.${contentType}.${providerName}`;
+    return this.configService.get<number>(key, 0);
+  }
+
   async generateScript(request: GenerateScriptRequestDto): Promise<IVideoScript> {
-    return this.scriptGenerator.generateScript(request);
+    const start = Date.now();
+    const providerName = this.scriptGenerator.getProviderName();
+    try {
+      const result = await this.scriptGenerator.generateScript(request);
+      this.costTrackingService.recordCall({
+        provider: providerName,
+        contentType: ContentType.SCRIPT,
+        estimatedCostUsd: this.lookupCostRate(ContentType.SCRIPT, providerName),
+        durationMs: Date.now() - start,
+        success: true,
+        timestamp: new Date(),
+      });
+      return result;
+    } catch (error) {
+      this.costTrackingService.recordCall({
+        provider: providerName,
+        contentType: ContentType.SCRIPT,
+        estimatedCostUsd: 0,
+        durationMs: Date.now() - start,
+        success: false,
+        timestamp: new Date(),
+      });
+      throw error;
+    }
   }
 
   async generateImage(request: GenerateImageRequestDto): Promise<IGeneratedImage> {
-    return this.imageGenerator.generateImage(request);
+    const start = Date.now();
+    const providerName = this.imageGenerator.getProviderName();
+    try {
+      const result = await this.imageGenerator.generateImage(request);
+      this.costTrackingService.recordCall({
+        provider: providerName,
+        contentType: ContentType.IMAGE,
+        estimatedCostUsd: this.lookupCostRate(ContentType.IMAGE, providerName),
+        durationMs: Date.now() - start,
+        success: true,
+        timestamp: new Date(),
+      });
+      return result;
+    } catch (error) {
+      this.costTrackingService.recordCall({
+        provider: providerName,
+        contentType: ContentType.IMAGE,
+        estimatedCostUsd: 0,
+        durationMs: Date.now() - start,
+        success: false,
+        timestamp: new Date(),
+      });
+      throw error;
+    }
   }
 
   async generateAudio(request: GenerateAudioRequestDto): Promise<IGeneratedAudio> {
-    return this.ttsProvider.generateAudio(request);
+    const start = Date.now();
+    const providerName = this.ttsProvider.getProviderName();
+    try {
+      const result = await this.ttsProvider.generateAudio(request);
+      this.costTrackingService.recordCall({
+        provider: providerName,
+        contentType: ContentType.AUDIO,
+        estimatedCostUsd: this.lookupCostRate(ContentType.AUDIO, providerName),
+        durationMs: Date.now() - start,
+        success: true,
+        timestamp: new Date(),
+      });
+      return result;
+    } catch (error) {
+      this.costTrackingService.recordCall({
+        provider: providerName,
+        contentType: ContentType.AUDIO,
+        estimatedCostUsd: 0,
+        durationMs: Date.now() - start,
+        success: false,
+        timestamp: new Date(),
+      });
+      throw error;
+    }
   }
 
   /**
@@ -58,7 +137,7 @@ export class ContentService {
   async generateVideoContent(request: GenerateScriptRequestDto): Promise<IGeneratedContent> {
     this.logger.log(`Starting video content generation for: "${request.topic}"`);
 
-    const script = await this.scriptGenerator.generateScript(request);
+    const script = await this.generateScript(request);
     this.logger.log(`Script generated: "${script.title}" with ${script.scenes.length} scenes`);
 
     const sceneAssets = await Promise.all(
@@ -91,8 +170,8 @@ export class ContentService {
     narration: string,
   ): Promise<ISceneAssets> {
     const [imageResult, audioResult] = await Promise.allSettled([
-      this.imageGenerator.generateImage({ prompt: imageDescription }),
-      this.ttsProvider.generateAudio({ text: narration }),
+      this.generateImage({ prompt: imageDescription }),
+      this.generateAudio({ text: narration }),
     ]);
 
     const sceneAsset: ISceneAssets = { sceneId, sequenceNumber };

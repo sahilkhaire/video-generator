@@ -10,6 +10,7 @@ import { VideoModule } from './modules/video/video.module';
 import { QueueModule } from './modules/queue/queue.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { HealthModule } from './modules/health/health.module';
+import { CostModule } from './modules/cost/cost.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { HealthModule } from './modules/health/health.module';
     QueueModule,
     StorageModule,
     HealthModule,
+    CostModule,
   ],
   controllers: [AppController],
   providers: [AppService],

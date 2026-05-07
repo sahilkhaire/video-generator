@@ -65,4 +65,24 @@ export default registerAs('providers', () => ({
   replicate: {
     apiKey: process.env.REPLICATE_API_KEY || '',
   },
+
+  // Estimated cost per API call in USD (configurable via env vars)
+  costs: {
+    script: {
+      openai: parseFloat(process.env.COST_SCRIPT_OPENAI ?? '0.05'),
+      claude: parseFloat(process.env.COST_SCRIPT_CLAUDE ?? '0.02'),
+      ollama: parseFloat(process.env.COST_SCRIPT_OLLAMA ?? '0.00'),
+    },
+    image: {
+      dalle: parseFloat(process.env.COST_IMAGE_DALLE ?? '0.04'),
+      'stable-diffusion': parseFloat(process.env.COST_IMAGE_SD ?? '0.002'),
+      leonardo: parseFloat(process.env.COST_IMAGE_LEONARDO ?? '0.01'),
+    },
+    tts: {
+      openai: parseFloat(process.env.COST_TTS_OPENAI ?? '0.015'),
+      elevenlabs: parseFloat(process.env.COST_TTS_ELEVENLABS ?? '0.03'),
+      'google-tts': parseFloat(process.env.COST_TTS_GOOGLE ?? '0.004'),
+      coqui: parseFloat(process.env.COST_TTS_COQUI ?? '0.00'),
+    },
+  },
 }));

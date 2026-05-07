@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { ContentService, IGeneratedContent } from './content.service';
 import { SCRIPT_GENERATOR, IMAGE_GENERATOR, TTS_PROVIDER } from './constants/injection-tokens';
 import { IScriptGenerator, IVideoScript } from '../../domain/interfaces/script-generator.interface';
@@ -7,6 +8,7 @@ import {
   IGeneratedImage,
 } from '../../domain/interfaces/image-generator.interface';
 import { ITTSProvider, IGeneratedAudio } from '../../domain/interfaces/tts-provider.interface';
+import { CostTrackingService } from '../cost/cost-tracking.service';
 import { GenerateScriptRequestDto } from '../../domain/dto/generate-script.dto';
 import {
   VideoPlatform,
@@ -66,7 +68,20 @@ describe('ContentService', () => {
   let mockImageGenerator: jest.Mocked<IImageGenerator>;
   let mockTtsProvider: jest.Mocked<ITTSProvider>;
 
+  const mockConfigService = {
+    get: jest.fn().mockReturnValue(0),
+  };
+
+  const mockCostTrackingService = {
+    recordCall: jest.fn().mockImplementation((r: unknown) => ({ ...(r as object), id: 'test-id' })),
+    getSummary: jest.fn(),
+    getRecords: jest.fn().mockReturnValue([]),
+    reset: jest.fn(),
+  };
+
   beforeEach(async () => {
+    jest.clearAllMocks();
+
     mockScriptGenerator = {
       generateScript: jest.fn(),
       getProviderName: jest.fn().mockReturnValue('openai'),
@@ -88,6 +103,8 @@ describe('ContentService', () => {
         { provide: SCRIPT_GENERATOR, useValue: mockScriptGenerator },
         { provide: IMAGE_GENERATOR, useValue: mockImageGenerator },
         { provide: TTS_PROVIDER, useValue: mockTtsProvider },
+        { provide: ConfigService, useValue: mockConfigService },
+        { provide: CostTrackingService, useValue: mockCostTrackingService },
       ],
     }).compile();
 
