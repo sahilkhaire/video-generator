@@ -12,6 +12,7 @@ import { StableDiffusionImageProvider } from './providers/image/stable-diffusion
 import { TogetherImageProvider } from './providers/image/together-image.provider';
 import { OpenAITTSProvider } from './providers/tts/openai-tts.provider';
 import { ElevenLabsTTSProvider } from './providers/tts/elevenlabs-tts.provider';
+import { EdgeTTSProvider } from './providers/tts/edge-tts.provider';
 import { IScriptGenerator } from '../../domain/interfaces/script-generator.interface';
 import { IImageGenerator } from '../../domain/interfaces/image-generator.interface';
 import { ITTSProvider } from '../../domain/interfaces/tts-provider.interface';
@@ -31,6 +32,7 @@ import { ScriptProvider, ImageProvider, TTSProvider } from '../../config/provide
     TogetherImageProvider,
     OpenAITTSProvider,
     ElevenLabsTTSProvider,
+    EdgeTTSProvider,
 
     // Script generator: resolved at startup based on SCRIPT_PROVIDER env var
     {
@@ -89,16 +91,19 @@ import { ScriptProvider, ImageProvider, TTSProvider } from '../../config/provide
         configService: ConfigService,
         openaiTts: OpenAITTSProvider,
         elevenlabs: ElevenLabsTTSProvider,
+        edgeTts: EdgeTTSProvider,
       ): ITTSProvider => {
         const provider = configService.get<string>('providers.tts.provider', TTSProvider.OPENAI);
         switch (provider) {
           case TTSProvider.ELEVENLABS:
             return elevenlabs;
+          case TTSProvider.EDGE_TTS:
+            return edgeTts;
           default:
             return openaiTts;
         }
       },
-      inject: [ConfigService, OpenAITTSProvider, ElevenLabsTTSProvider],
+      inject: [ConfigService, OpenAITTSProvider, ElevenLabsTTSProvider, EdgeTTSProvider],
     },
 
     ContentService,

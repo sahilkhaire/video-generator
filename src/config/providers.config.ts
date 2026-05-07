@@ -19,6 +19,7 @@ export enum TTSProvider {
   ELEVENLABS = 'elevenlabs',
   GOOGLE_TTS = 'google-tts',
   COQUI = 'coqui',
+  EDGE_TTS = 'edge-tts',
 }
 
 export default registerAs('providers', () => ({
@@ -66,6 +67,11 @@ export default registerAs('providers', () => ({
   // Replicate Configuration (for Stable Diffusion)
   replicate: {
     apiKey: process.env.REPLICATE_API_KEY || '',
+  },
+
+  // Microsoft Edge TTS Configuration (no API key required — uses Edge Read Aloud service)
+  edgeTts: {
+    voice: process.env.EDGE_TTS_VOICE || 'en-US-AriaNeural',
   },
 
   // TogetherAI Configuration
