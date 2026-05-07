@@ -8,6 +8,7 @@ const samples = [
     targetAudience: 'early-stage Indian founders',
     additionalContext: 'Use practical Indian market examples and one strong CTA.',
     resolution: '1080p',
+    aspectRatio: '16:9',
     fps: 30,
   },
   {
@@ -19,6 +20,7 @@ const samples = [
     targetAudience: 'UPSC aspirants',
     additionalContext: 'Keep narration concise and motivational.',
     resolution: '720p',
+    aspectRatio: '9:16',
     fps: 30,
   },
   {
@@ -30,6 +32,7 @@ const samples = [
     targetAudience: 'teens and sports fans',
     additionalContext: 'Open with a hook and close with a challenge question.',
     resolution: '720p',
+    aspectRatio: '9:16',
     fps: 30,
   },
 ];
@@ -44,6 +47,7 @@ const refs = {
   targetAudience: document.getElementById('targetAudience'),
   additionalContext: document.getElementById('additionalContext'),
   resolution: document.getElementById('resolution'),
+  aspectRatio: document.getElementById('aspectRatio'),
   fps: document.getElementById('fps'),
   voice: document.getElementById('voice'),
   loadVoicesBtn: document.getElementById('loadVoicesBtn'),
@@ -84,6 +88,7 @@ function applySample(sample) {
   refs.targetAudience.value = sample.targetAudience;
   refs.additionalContext.value = sample.additionalContext;
   refs.resolution.value = sample.resolution;
+  refs.aspectRatio.value = sample.aspectRatio || '16:9';
   refs.fps.value = String(sample.fps);
 }
 
@@ -97,6 +102,7 @@ function getPayload() {
     targetAudience: refs.targetAudience.value.trim() || undefined,
     additionalContext: refs.additionalContext.value.trim() || undefined,
     resolution: refs.resolution.value,
+    aspectRatio: refs.aspectRatio.value,
     fps: Number(refs.fps.value),
     voice: voice || undefined,
   };
@@ -214,6 +220,12 @@ refs.samplePreset.addEventListener('change', (event) => {
   const idx = Number(event.target.value);
   applySample(samples[idx]);
   setStatus('Preset applied.', 'good');
+});
+
+refs.platform.addEventListener('change', () => {
+  if (refs.platform.value === 'instagram_reels' && refs.aspectRatio.value === '16:9') {
+    refs.aspectRatio.value = '9:16';
+  }
 });
 
 refs.loadVoicesBtn.addEventListener('click', async () => {

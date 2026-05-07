@@ -55,6 +55,7 @@ export class VideoController {
       targetAudience: dto.targetAudience,
       additionalContext: dto.additionalContext,
       resolution: dto.resolution,
+      aspectRatio: dto.aspectRatio,
       fps: dto.fps,
     });
   }

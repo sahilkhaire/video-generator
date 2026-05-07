@@ -1,5 +1,5 @@
 import { VideoPlatform, VideoStyle } from '../enums/video.enums';
-import { VideoResolution } from './rendering.interface';
+import { VideoResolution, VideoAspectRatio } from './rendering.interface';
 
 // ──────────────────────────────────────────────────────────
 // Job status
@@ -23,6 +23,7 @@ export interface IVideoJobData {
   targetAudience?: string;
   additionalContext?: string;
   resolution?: VideoResolution;
+  aspectRatio?: VideoAspectRatio;
   fps?: number;
 }
 

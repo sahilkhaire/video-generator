@@ -21,6 +21,7 @@ export class VideoJobRepository {
       targetAudience: data.targetAudience,
       additionalContext: data.additionalContext,
       resolution: data.resolution,
+      aspectRatio: data.aspectRatio,
       fps: data.fps,
       status: VideoJobStatus.WAITING,
       progress: 0,

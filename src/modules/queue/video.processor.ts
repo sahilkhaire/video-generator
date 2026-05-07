@@ -85,6 +85,7 @@ export class VideoProcessor implements OnModuleInit, OnModuleDestroy {
       targetAudience: job.data.targetAudience,
       additionalContext: job.data.additionalContext,
       resolution: job.data.resolution,
+      aspectRatio: job.data.aspectRatio,
       fps: job.data.fps,
     };
 

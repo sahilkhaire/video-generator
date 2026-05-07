@@ -2,7 +2,7 @@ import { IsEnum, IsOptional, IsNumber, IsString, Min, Max, MaxLength } from 'cla
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IntersectionType } from '@nestjs/swagger';
 import { GenerateScriptRequestDto } from './generate-script.dto';
-import { VideoResolution } from '../interfaces/rendering.interface';
+import { VideoResolution, VideoAspectRatio } from '../interfaces/rendering.interface';
 
 export class GenerateVideoRequestDto extends IntersectionType(GenerateScriptRequestDto) {
   @ApiPropertyOptional({
@@ -13,6 +13,15 @@ export class GenerateVideoRequestDto extends IntersectionType(GenerateScriptRequ
   @IsEnum(VideoResolution)
   @IsOptional()
   resolution?: VideoResolution;
+
+  @ApiPropertyOptional({
+    enum: VideoAspectRatio,
+    description: 'Output video aspect ratio. Defaults to 9:16 for Instagram when omitted.',
+    default: VideoAspectRatio.LANDSCAPE_16_9,
+  })
+  @IsEnum(VideoAspectRatio)
+  @IsOptional()
+  aspectRatio?: VideoAspectRatio;
 
   @ApiPropertyOptional({ description: 'Frames per second', minimum: 24, maximum: 60, default: 30 })
   @IsNumber()

@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import { VideoPlatform, VideoStyle } from '../../../domain/enums/video.enums';
 import { VideoJobStatus } from '../../../domain/interfaces/video-job.interface';
-import { VideoResolution } from '../../../domain/interfaces/rendering.interface';
+import { VideoResolution, VideoAspectRatio } from '../../../domain/interfaces/rendering.interface';
 
 export type VideoJobDocument = HydratedDocument<VideoJob>;
 
@@ -32,6 +32,9 @@ export class VideoJob {
 
   @Prop({ enum: VideoResolution })
   resolution?: VideoResolution;
+
+  @Prop({ enum: VideoAspectRatio })
+  aspectRatio?: VideoAspectRatio;
 
   @Prop()
   fps?: number;

@@ -3,10 +3,11 @@ import { ContentService } from '../content/content.service';
 import { RenderingService } from '../rendering/rendering.service';
 import { GenerateVideoRequestDto } from '../../domain/dto/generate-video.dto';
 import { IRenderedVideo } from '../../domain/interfaces/rendering.interface';
-import { VideoResolution } from '../../domain/interfaces/rendering.interface';
+import { VideoAspectRatio, VideoResolution } from '../../domain/interfaces/rendering.interface';
 import { ITTSVoice } from '../../domain/interfaces/tts-provider.interface';
 import { VideoJobRepository } from '../database/repositories/video-job.repository';
 import { CostRecordRepository } from '../database/repositories/cost-record.repository';
+import { VideoPlatform } from '../../domain/enums/video.enums';
 
 export interface IVideoGenerationResult {
   video: IRenderedVideo;
@@ -59,6 +60,11 @@ export class VideoService {
 
   async generateVideo(request: GenerateVideoRequestDto): Promise<IVideoGenerationResult> {
     const resolution = request.resolution ?? VideoResolution.HD_720P;
+    const aspectRatio =
+      request.aspectRatio ??
+      (request.platform === VideoPlatform.INSTAGRAM_REELS
+        ? VideoAspectRatio.PORTRAIT_9_16
+        : VideoAspectRatio.LANDSCAPE_16_9);
 
     this.logger.log(
       `Video generation started — topic: "${request.topic}", platform: ${request.platform}`,
@@ -76,6 +82,7 @@ export class VideoService {
       script: content.script,
       sceneAssets: content.sceneAssets,
       resolution,
+      aspectRatio,
       fps: request.fps,
     });
 

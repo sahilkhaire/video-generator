@@ -6,7 +6,8 @@ import {
   IRenderVideoRequest,
   IRenderedVideo,
   IComposedFrame,
-  VIDEO_RESOLUTION_MAP,
+  IVideoResolutionSpec,
+  resolveVideoResolutionSpec,
 } from '../../domain/interfaces/rendering.interface';
 
 @Injectable()
@@ -25,7 +26,7 @@ export class RenderingService {
   async renderVideo(request: IRenderVideoRequest): Promise<IRenderedVideo> {
     const { script, sceneAssets, resolution, outputPath } = request;
     const fps = request.fps ?? this.defaultFps;
-    const resolutionSpec = VIDEO_RESOLUTION_MAP[resolution];
+    const resolutionSpec = resolveVideoResolutionSpec(resolution, request.aspectRatio);
 
     this.logger.log(
       `Starting render: "${script.title}" — ${script.scenes.length} scenes, ${resolutionSpec.width}x${resolutionSpec.height} @ ${fps}fps`,
@@ -56,7 +57,7 @@ export class RenderingService {
 
   private async composeAllFrames(
     request: IRenderVideoRequest,
-    resolutionSpec: (typeof VIDEO_RESOLUTION_MAP)[keyof typeof VIDEO_RESOLUTION_MAP],
+    resolutionSpec: IVideoResolutionSpec,
     _fps: number,
   ): Promise<IComposedFrame[]> {
     const { script, sceneAssets } = request;
