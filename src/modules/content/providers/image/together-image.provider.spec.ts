@@ -61,6 +61,13 @@ describe('TogetherImageProvider', () => {
   });
 
   describe('generateImage', () => {
+    const configGet = (key: string, def?: unknown): unknown => {
+      if (key === 'providers.together.apiKey') return 'test-together-key';
+      if (key === 'providers.together.imageModel') return 'black-forest-labs/FLUX.1-schnell';
+      if (key === 'providers.together.maxAttempts') return 2;
+      return def;
+    };
+
     it('should throw ProviderNotConfiguredException when API key is missing', async () => {
       // Arrange
       (configService.get as jest.Mock).mockReturnValue(undefined);
@@ -73,10 +80,7 @@ describe('TogetherImageProvider', () => {
 
     it('should initialise OpenAI client with TogetherAI baseURL', async () => {
       // Arrange
-      (configService.get as jest.Mock).mockImplementation((key: string, def?: string) => {
-        if (key === 'providers.together.apiKey') return 'test-together-key';
-        return def;
-      });
+      (configService.get as jest.Mock).mockImplementation(configGet);
       mockGenerate.mockResolvedValueOnce({
         data: [{ b64_json: 'base64imagedata==' }],
       });
@@ -92,10 +96,7 @@ describe('TogetherImageProvider', () => {
 
     it('should return base64Data from the TogetherAI response', async () => {
       // Arrange
-      (configService.get as jest.Mock).mockImplementation((key: string, def?: string) => {
-        if (key === 'providers.together.apiKey') return 'test-together-key';
-        return def;
-      });
+      (configService.get as jest.Mock).mockImplementation(configGet);
       mockGenerate.mockResolvedValueOnce({
         data: [{ b64_json: 'base64imagedata==' }],
       });
@@ -113,10 +114,7 @@ describe('TogetherImageProvider', () => {
 
     it('should use response_format b64_json in the API call', async () => {
       // Arrange
-      (configService.get as jest.Mock).mockImplementation((key: string, def?: string) => {
-        if (key === 'providers.together.apiKey') return 'test-together-key';
-        return def;
-      });
+      (configService.get as jest.Mock).mockImplementation(configGet);
       mockGenerate.mockResolvedValueOnce({
         data: [{ b64_json: 'data==' }],
       });
@@ -131,10 +129,7 @@ describe('TogetherImageProvider', () => {
 
     it('should include styleModifier in the prompt when provided', async () => {
       // Arrange
-      (configService.get as jest.Mock).mockImplementation((key: string, def?: string) => {
-        if (key === 'providers.together.apiKey') return 'test-together-key';
-        return def;
-      });
+      (configService.get as jest.Mock).mockImplementation(configGet);
       mockGenerate.mockResolvedValueOnce({
         data: [{ b64_json: 'data==' }],
       });
@@ -153,10 +148,7 @@ describe('TogetherImageProvider', () => {
 
     it('should default size to SQUARE (1024x1024) when not specified', async () => {
       // Arrange
-      (configService.get as jest.Mock).mockImplementation((key: string, def?: string) => {
-        if (key === 'providers.together.apiKey') return 'test-together-key';
-        return def;
-      });
+      (configService.get as jest.Mock).mockImplementation(configGet);
       mockGenerate.mockResolvedValueOnce({
         data: [{ b64_json: 'data==' }],
       });
@@ -172,10 +164,7 @@ describe('TogetherImageProvider', () => {
 
     it('should throw ImageGenerationException when response has no b64_json', async () => {
       // Arrange
-      (configService.get as jest.Mock).mockImplementation((key: string, def?: string) => {
-        if (key === 'providers.together.apiKey') return 'test-together-key';
-        return def;
-      });
+      (configService.get as jest.Mock).mockImplementation(configGet);
       mockGenerate.mockResolvedValueOnce({ data: [{}] });
 
       // Act & Assert
@@ -186,10 +175,7 @@ describe('TogetherImageProvider', () => {
 
     it('should throw ImageGenerationException when API call fails', async () => {
       // Arrange
-      (configService.get as jest.Mock).mockImplementation((key: string, def?: string) => {
-        if (key === 'providers.together.apiKey') return 'test-together-key';
-        return def;
-      });
+      (configService.get as jest.Mock).mockImplementation(configGet);
       mockGenerate.mockRejectedValueOnce(new Error('Model unavailable'));
 
       // Act & Assert
@@ -200,10 +186,7 @@ describe('TogetherImageProvider', () => {
 
     it('should reuse the same OpenAI client on repeated calls', async () => {
       // Arrange
-      (configService.get as jest.Mock).mockImplementation((key: string, def?: string) => {
-        if (key === 'providers.together.apiKey') return 'test-together-key';
-        return def;
-      });
+      (configService.get as jest.Mock).mockImplementation(configGet);
       mockGenerate.mockResolvedValue({ data: [{ b64_json: 'data==' }] });
 
       // Act
@@ -212,6 +195,38 @@ describe('TogetherImageProvider', () => {
 
       // Assert — constructor called only once
       expect(OpenAIMock.default).toHaveBeenCalledTimes(1);
+    });
+
+    it('should fallback to a serverless model when configured model requires dedicated endpoint', async () => {
+      // Arrange
+      (configService.get as jest.Mock).mockImplementation((key: string, def?: unknown) => {
+        if (key === 'providers.together.apiKey') return 'test-together-key';
+        if (key === 'providers.together.imageModel') {
+          return 'black-forest-labs/FLUX.1-schnell-Free';
+        }
+        if (key === 'providers.together.maxAttempts') return 1;
+        return def;
+      });
+
+      const dedicatedOnlyError = Object.assign(
+        new Error('Unable to access non-serverless model. Please create a dedicated endpoint.'),
+        { status: 400 },
+      );
+
+      mockGenerate
+        .mockRejectedValueOnce(dedicatedOnlyError)
+        .mockResolvedValueOnce({ data: [{ b64_json: 'fallback-image-data==' }] });
+
+      // Act
+      const result = await provider.generateImage(validRequest);
+
+      // Assert
+      expect(result.base64Data).toBe('fallback-image-data==');
+      expect(mockGenerate).toHaveBeenCalledTimes(2);
+      const firstCall = mockGenerate.mock.calls[0][0] as Record<string, unknown>;
+      const secondCall = mockGenerate.mock.calls[1][0] as Record<string, unknown>;
+      expect(firstCall.model).toBe('black-forest-labs/FLUX.1-schnell-Free');
+      expect(secondCall.model).toBe('black-forest-labs/FLUX.1-schnell');
     });
   });
 });

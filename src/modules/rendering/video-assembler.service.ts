@@ -8,6 +8,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { IComposedFrame, IRenderedVideo } from '../../domain/interfaces/rendering.interface';
 import { IGeneratedAudio } from '../../domain/interfaces/tts-provider.interface';
 
+type FFmpegStaticExport = string | { default?: string };
+
 export interface IAssembleVideoOptions {
   frames: IComposedFrame[];
   audioTracks: Array<{ sceneId: string; audio?: IGeneratedAudio }>;
@@ -20,9 +22,10 @@ export class VideoAssemblerService {
   private readonly logger = new Logger(VideoAssemblerService.name);
 
   constructor(private readonly configService: ConfigService) {
-    // Use bundled ffmpeg-static binary if no system ffmpeg is available
-    const ffmpegPath = (ffmpegStatic as unknown as string) ?? 'ffmpeg';
+    // ffmpeg-static export shape can be string (CJS) or { default: string } (ESM interop).
+    const ffmpegPath = this.resolveFfmpegPath(ffmpegStatic as unknown as FFmpegStaticExport);
     ffmpeg.setFfmpegPath(ffmpegPath);
+    this.logger.log(`FFmpeg binary: ${ffmpegPath}`);
   }
 
   async assembleVideo(options: IAssembleVideoOptions): Promise<IRenderedVideo> {
@@ -166,5 +169,23 @@ export class VideoAssemblerService {
 
   private async cleanupTemp(paths: string[]): Promise<void> {
     await Promise.allSettled(paths.map((p) => fs.unlink(p)));
+  }
+
+  private resolveFfmpegPath(binaryExport: FFmpegStaticExport): string {
+    if (typeof binaryExport === 'string' && binaryExport.length > 0) {
+      return binaryExport;
+    }
+
+    if (
+      binaryExport &&
+      typeof binaryExport === 'object' &&
+      typeof binaryExport.default === 'string' &&
+      binaryExport.default.length > 0
+    ) {
+      return binaryExport.default;
+    }
+
+    this.logger.warn('ffmpeg-static path not found; falling back to system ffmpeg command');
+    return 'ffmpeg';
   }
 }

@@ -71,6 +71,8 @@ export default registerAs('providers', () => ({
   // TogetherAI Configuration
   together: {
     apiKey: process.env.TOGETHER_API_KEY || '',
+    imageModel: process.env.TOGETHER_IMAGE_MODEL || 'black-forest-labs/FLUX.1-schnell',
+    maxAttempts: parseInt(process.env.TOGETHER_MAX_ATTEMPTS || '3', 10),
   },
 
   // Estimated cost per API call in USD (configurable via env vars)

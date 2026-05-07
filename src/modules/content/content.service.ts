@@ -171,16 +171,10 @@ export class ContentService {
     const script = await this.generateScript(request);
     this.logger.log(`Script generated: "${script.title}" with ${script.scenes.length} scenes`);
 
-    const sceneAssets = await Promise.all(
-      script.scenes.map((scene) =>
-        this.generateSceneAssets(
-          scene.id,
-          scene.sequenceNumber,
-          scene.imageDescription,
-          scene.narration,
-        ),
-      ),
-    );
+    const maxConcurrentScenes = Math.max(1, this.configService.get<number>('video.queue.concurrency', 2));
+    this.logger.log(`Generating scene assets with concurrency ${maxConcurrentScenes}`);
+
+    const sceneAssets = await this.generateSceneAssetsWithConcurrency(script, maxConcurrentScenes);
 
     this.logger.log(`Content generation complete for: "${script.title}"`);
 
@@ -226,6 +220,41 @@ export class ContentService {
     }
 
     return sceneAsset;
+  }
+
+  private async generateSceneAssetsWithConcurrency(
+    script: IVideoScript,
+    maxConcurrentScenes: number,
+  ): Promise<ISceneAssets[]> {
+    const results: ISceneAssets[] = new Array(script.scenes.length);
+    let cursor = 0;
+
+    const worker = async (): Promise<void> => {
+      while (true) {
+        const index = cursor;
+        cursor += 1;
+
+        if (index >= script.scenes.length) {
+          return;
+        }
+
+        const scene = script.scenes[index];
+        results[index] = await this.generateSceneAssets(
+          scene.id,
+          scene.sequenceNumber,
+          scene.imageDescription,
+          scene.narration,
+        );
+      }
+    };
+
+    const workers = Array.from(
+      { length: Math.min(maxConcurrentScenes, script.scenes.length) },
+      () => worker(),
+    );
+
+    await Promise.all(workers);
+    return results;
   }
 
   getActiveProviders(): { script: string; image: string; tts: string } {

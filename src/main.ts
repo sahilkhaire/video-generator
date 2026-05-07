@@ -19,7 +19,12 @@ async function bootstrap(): Promise<void> {
   const environment = configService.get<string>('NODE_ENV', 'development');
 
   // Security
-  app.use(helmet());
+  app.use(
+    helmet({
+      // Keep strict defaults in production; relax CSP locally for the inline /api/ui playground assets.
+      contentSecurityPolicy: environment === 'production' ? undefined : false,
+    }),
+  );
 
   // CORS
   app.enableCors({

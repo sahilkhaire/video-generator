@@ -19,13 +19,29 @@ export class VideoProcessor implements OnModuleInit, OnModuleDestroy {
   onModuleInit(): void {
     const redisHost = this.configService.get<string>('REDIS_HOST', 'localhost');
     const redisPort = this.configService.get<number>('REDIS_PORT', 6379);
+    const concurrency = Math.max(1, this.configService.get<number>('video.queue.concurrency', 2));
+    const lockDurationMs = Math.max(
+      30000,
+      this.configService.get<number>('video.queue.lockDurationMs', 300000),
+    );
+    const stalledIntervalMs = Math.max(
+      5000,
+      this.configService.get<number>('video.queue.stalledIntervalMs', 30000),
+    );
+    const maxStalledCount = Math.max(
+      1,
+      this.configService.get<number>('video.queue.maxStalledCount', 3),
+    );
 
     this.worker = new Worker<IVideoJobData, IVideoJobResult>(
       VIDEO_QUEUE_NAME,
       async (job: Job<IVideoJobData, IVideoJobResult>) => this.process(job),
       {
         connection: { host: redisHost, port: redisPort },
-        concurrency: 2,
+        concurrency,
+        lockDuration: lockDurationMs,
+        stalledInterval: stalledIntervalMs,
+        maxStalledCount,
       },
     );
 
@@ -37,7 +53,13 @@ export class VideoProcessor implements OnModuleInit, OnModuleDestroy {
       this.logger.error(`Job ${job?.id} failed — ${error.message}`, error.stack);
     });
 
-    this.logger.log(`VideoProcessor worker started (concurrency: 2)`);
+    this.worker.on('stalled', (jobId) => {
+      this.logger.warn(`Job ${jobId} stalled and was re-queued by BullMQ`);
+    });
+
+    this.logger.log(
+      `VideoProcessor worker started (concurrency: ${concurrency}, lockDurationMs: ${lockDurationMs}, stalledIntervalMs: ${stalledIntervalMs}, maxStalledCount: ${maxStalledCount})`,
+    );
   }
 
   async onModuleDestroy(): Promise<void> {

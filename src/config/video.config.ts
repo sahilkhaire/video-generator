@@ -30,6 +30,9 @@ export default registerAs('video', () => ({
     concurrency: parseInt(process.env.QUEUE_CONCURRENCY || '2', 10),
     maxRetries: parseInt(process.env.QUEUE_MAX_RETRIES || '3', 10),
     backoffDelay: parseInt(process.env.QUEUE_BACKOFF_DELAY || '5000', 10),
+    lockDurationMs: parseInt(process.env.QUEUE_LOCK_DURATION_MS || '300000', 10),
+    stalledIntervalMs: parseInt(process.env.QUEUE_STALLED_INTERVAL_MS || '30000', 10),
+    maxStalledCount: parseInt(process.env.QUEUE_MAX_STALLED_COUNT || '3', 10),
   },
 
   cache: {

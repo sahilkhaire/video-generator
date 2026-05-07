@@ -13,7 +13,8 @@ import {
 } from '../../../../common/exceptions/content-generation.exception';
 
 const TOGETHER_BASE_URL = 'https://api.together.xyz/v1';
-const DEFAULT_MODEL = 'black-forest-labs/FLUX.1-schnell-Free';
+const DEFAULT_MODEL = 'black-forest-labs/FLUX.1-schnell';
+const FALLBACK_MODELS = ['black-forest-labs/FLUX.1-schnell'];
 
 @Injectable()
 export class TogetherImageProvider implements IImageGenerator {
@@ -30,41 +31,80 @@ export class TogetherImageProvider implements IImageGenerator {
     this.logger.log(`Generating image via TogetherAI: "${request.prompt.slice(0, 60)}..."`);
 
     const client = this.getClient();
-    const model = this.configService.get<string>('providers.image.model', DEFAULT_MODEL);
+    const configuredModel = this.configService.get<string>(
+      'providers.together.imageModel',
+      this.configService.get<string>('providers.image.model', DEFAULT_MODEL),
+    );
+    const candidateModels = this.buildCandidateModels(configuredModel);
+    const maxAttempts = Math.max(1, this.configService.get<number>('providers.together.maxAttempts', 3));
     const size = request.size ?? ImageSize.SQUARE;
     const prompt = this.buildPrompt(request);
     const [width, height] = this.parseDimensions(size);
 
-    try {
-      const response = await client.images.generate({
-        model,
-        prompt,
-        n: 1,
-        // TogetherAI returns base64 by default
-        response_format: 'b64_json',
-        // Pass width/height as extra body params supported by Together's API
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ...(({ width, height } as any)),
-      });
+    let lastError: unknown;
 
-      const imageData = response.data ?? [];
-      const image = imageData[0];
-      if (!image?.b64_json) {
-        throw new ImageGenerationException('together-ai', new Error('No image data in TogetherAI response'));
+    for (const model of candidateModels) {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const response = await client.images.generate({
+            model,
+            prompt,
+            n: 1,
+            response_format: 'b64_json',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ...(({ width, height } as any)),
+          });
+
+          const imageData = response.data ?? [];
+          const image = imageData[0];
+          if (!image?.b64_json) {
+            throw new ImageGenerationException(
+              'together-ai',
+              new Error('No image data in TogetherAI response'),
+            );
+          }
+
+          return {
+            base64Data: image.b64_json,
+            width,
+            height,
+            format: ImageFormat.PNG,
+            prompt: request.prompt,
+          };
+        } catch (error) {
+          if (error instanceof ImageGenerationException) {
+            throw error;
+          }
+
+          lastError = error;
+
+          if (
+            this.isNonServerlessModelError(error) &&
+            model !== candidateModels[candidateModels.length - 1]
+          ) {
+            this.logger.warn(
+              `TogetherAI model ${model} requires a dedicated endpoint; trying fallback model.`,
+            );
+            break;
+          }
+
+          if (this.isRateLimitError(error) && attempt < maxAttempts) {
+            const delayMs = 500 * attempt;
+            this.logger.warn(
+              `TogetherAI rate-limited. Retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts}).`,
+            );
+            await this.sleep(delayMs);
+            continue;
+          }
+
+          this.logger.error('TogetherAI image generation failed', error as Error);
+          throw new ImageGenerationException('together-ai', error as Error);
+        }
       }
-
-      return {
-        base64Data: image.b64_json,
-        width,
-        height,
-        format: ImageFormat.PNG,
-        prompt: request.prompt,
-      };
-    } catch (error) {
-      if (error instanceof ImageGenerationException) throw error;
-      this.logger.error('TogetherAI image generation failed', error);
-      throw new ImageGenerationException('together-ai', error as Error);
     }
+
+    this.logger.error('TogetherAI image generation failed', lastError as Error);
+    throw new ImageGenerationException('together-ai', lastError as Error);
   }
 
   private getClient(): OpenAI {
@@ -89,5 +129,26 @@ export class TogetherImageProvider implements IImageGenerator {
   private parseDimensions(size: ImageSize): [number, number] {
     const [w, h] = size.split('x').map(Number);
     return [w, h];
+  }
+
+  private buildCandidateModels(configuredModel: string): string[] {
+    const models = [configuredModel, ...FALLBACK_MODELS];
+    const filtered = models.filter((model) => model && model.trim().length > 0);
+    return [...new Set(filtered)];
+  }
+
+  private isRateLimitError(error: unknown): boolean {
+    const status = (error as { status?: number })?.status;
+    const message = (error as { message?: string })?.message?.toLowerCase() ?? '';
+    return status === 429 || message.includes('rate limit');
+  }
+
+  private isNonServerlessModelError(error: unknown): boolean {
+    const message = (error as { message?: string })?.message?.toLowerCase() ?? '';
+    return message.includes('non-serverless model') || message.includes('dedicated endpoint');
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
