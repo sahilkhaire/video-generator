@@ -10,6 +10,7 @@ import { ContentService } from '../content/content.service';
 import { RenderingService } from '../rendering/rendering.service';
 import { VideoJobRepository } from '../database/repositories/video-job.repository';
 import { CostRecordRepository } from '../database/repositories/cost-record.repository';
+import { ConfigService } from '@nestjs/config';
 import { GenerateVideoRequestDto } from '../../domain/dto/generate-video.dto';
 import {
   VideoPlatform,
@@ -107,8 +108,12 @@ describe('VideoService', () => {
         VideoService,
         { provide: ContentService, useValue: mockContentService },
         { provide: RenderingService, useValue: mockRenderingService },
-        { provide: VideoJobRepository, useValue: { save: jest.fn(), findById: jest.fn(), findAll: jest.fn() } },
+        {
+          provide: VideoJobRepository,
+          useValue: { save: jest.fn(), findById: jest.fn(), findAll: jest.fn() },
+        },
         { provide: CostRecordRepository, useValue: { save: jest.fn() } },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(2) } },
       ],
     }).compile();
 

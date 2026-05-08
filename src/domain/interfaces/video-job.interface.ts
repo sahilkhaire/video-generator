@@ -1,5 +1,6 @@
 import { VideoPlatform, VideoStyle } from '../enums/video.enums';
 import { VideoResolution, VideoAspectRatio } from './rendering.interface';
+import { ScriptProvider, ImageProvider } from '../../config/providers.config';
 
 // ──────────────────────────────────────────────────────────
 // Job status
@@ -12,10 +13,16 @@ export enum VideoJobStatus {
   DELAYED = 'delayed',
 }
 
+export enum VideoJobType {
+  STANDARD = 'standard',
+  MUSIC_VISUAL_STORY = 'music-visual-story',
+}
+
 // ──────────────────────────────────────────────────────────
 // Job payload — what the producer puts on the queue
 // ──────────────────────────────────────────────────────────
 export interface IVideoJobData {
+  jobType?: VideoJobType;
   topic: string;
   platform: VideoPlatform;
   style?: VideoStyle;
@@ -26,6 +33,24 @@ export interface IVideoJobData {
   aspectRatio?: VideoAspectRatio;
   fps?: number;
 }
+
+export interface IMusicVideoJobData {
+  jobType: VideoJobType.MUSIC_VISUAL_STORY;
+  topic: string;
+  style?: VideoStyle;
+  lyrics?: string;
+  additionalContext?: string;
+  musicPath?: string;
+  musicUrl?: string;
+  uploadedMusicPath?: string;
+  fps?: number;
+  youtubeResolution?: VideoResolution;
+  reelsResolution?: VideoResolution;
+  scriptProvider?: ScriptProvider;
+  imageProvider?: ImageProvider;
+}
+
+export type IVideoQueueJobData = IVideoJobData | IMusicVideoJobData;
 
 // ──────────────────────────────────────────────────────────
 // Successful result — stored in job.returnvalue by BullMQ
@@ -46,6 +71,31 @@ export interface IVideoJobResult {
   generatedAt: Date;
 }
 
+export interface IMusicVideoVariantResult {
+  platform: VideoPlatform;
+  aspectRatio: VideoAspectRatio;
+  resolution: VideoResolution;
+  videoPath: string;
+  duration: number;
+  width: number;
+  height: number;
+  fps: number;
+  fileSize: number;
+}
+
+export interface IMusicVideoJobResult {
+  mode: VideoJobType.MUSIC_VISUAL_STORY;
+  title: string;
+  description: string;
+  totalScenes: number;
+  variants: IMusicVideoVariantResult[];
+  scriptProvider: string;
+  imageProvider: string;
+  generatedAt: Date;
+}
+
+export type IVideoQueueJobResult = IVideoJobResult | IMusicVideoJobResult;
+
 // ──────────────────────────────────────────────────────────
 // Status response returned by the API GET endpoint
 // ──────────────────────────────────────────────────────────
@@ -53,7 +103,7 @@ export interface IVideoJobStatusResponse {
   jobId: string;
   status: VideoJobStatus;
   progress: number;
-  result?: IVideoJobResult;
+  result?: IVideoQueueJobResult;
   error?: string;
   createdAt: Date;
   processedAt?: Date;

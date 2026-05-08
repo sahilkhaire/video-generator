@@ -12,6 +12,7 @@ import { CostTrackingService } from '../cost/cost-tracking.service';
 import { CacheKeyService } from '../cache/cache-key.service';
 import { ContentCacheService } from '../cache/content-cache.service';
 import { GenerateScriptRequestDto } from '../../domain/dto/generate-script.dto';
+import { ProviderResolverService } from './provider-resolver.service';
 import {
   VideoPlatform,
   VideoStyle,
@@ -93,6 +94,11 @@ describe('ContentService', () => {
     del: jest.fn().mockResolvedValue(undefined),
   };
 
+  const mockProviderResolverService = {
+    resolveScriptProvider: jest.fn().mockImplementation((_override, fallback) => fallback),
+    resolveImageProvider: jest.fn().mockImplementation((_override, fallback) => fallback),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -122,6 +128,7 @@ describe('ContentService', () => {
         { provide: CostTrackingService, useValue: mockCostTrackingService },
         { provide: CacheKeyService, useValue: mockCacheKeyService },
         { provide: ContentCacheService, useValue: mockContentCacheService },
+        { provide: ProviderResolverService, useValue: mockProviderResolverService },
       ],
     }).compile();
 

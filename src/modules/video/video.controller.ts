@@ -8,18 +8,32 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  BadRequestException,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiParam,
+  ApiConsumes,
+} from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { VideoService } from './video.service';
 import { QueueService } from '../queue/queue.service';
 import { GenerateVideoRequestDto } from '../../domain/dto/generate-video.dto';
+import { GenerateMusicVideoRequestDto } from '../../domain/dto/generate-music-video.dto';
 import {
   IEnqueueJobResponse,
   IVideoJobStatusResponse,
+  VideoJobType,
 } from '../../domain/interfaces/video-job.interface';
 import { ITTSVoice } from '../../domain/interfaces/tts-provider.interface';
 import { IMongoDetailsResponse } from './video.service';
+import { VideoResolution } from '../../domain/interfaces/rendering.interface';
 
 interface IProvidersResponse {
   script: string;
@@ -57,6 +71,58 @@ export class VideoController {
       resolution: dto.resolution,
       aspectRatio: dto.aspectRatio,
       fps: dto.fps,
+    });
+  }
+
+  @Post('generate-music-story')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { ttl: 60000, limit: 6 } })
+  @UseInterceptors(
+    FileInterceptor('musicFile', {
+      dest: './temp/uploads',
+      limits: { fileSize: 80 * 1024 * 1024 },
+    }),
+  )
+  @ApiOperation({
+    summary: 'Enqueue music-to-visual-story generation job',
+    description:
+      'Creates visual-only storytelling videos from a song input and guidance. Generates YouTube (16:9) and Reels (9:16) variants in one background job.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: GenerateMusicVideoRequestDto })
+  @ApiResponse({ status: 202, description: 'Music visual-story job enqueued — returns jobId' })
+  @ApiResponse({ status: 400, description: 'Invalid request or missing music input' })
+  async enqueueMusicStoryVideo(
+    @Body() dto: GenerateMusicVideoRequestDto,
+    @UploadedFile() musicFile?: { path: string; originalname: string },
+  ): Promise<IEnqueueJobResponse> {
+    if (!musicFile && !dto.musicPath && !dto.musicUrl) {
+      throw new BadRequestException(
+        'Provide one music input via musicFile, musicPath, or musicUrl',
+      );
+    }
+
+    if (musicFile) {
+      const ext = (musicFile.originalname.split('.').pop() ?? '').toLowerCase();
+      if (!['mp3', 'wav'].includes(ext)) {
+        throw new BadRequestException('Uploaded music file must be mp3 or wav');
+      }
+    }
+
+    return this.queueService.enqueueMusicVisualStory({
+      jobType: VideoJobType.MUSIC_VISUAL_STORY,
+      topic: dto.topic,
+      style: dto.style,
+      lyrics: dto.lyrics,
+      additionalContext: dto.additionalContext,
+      musicPath: dto.musicPath,
+      musicUrl: dto.musicUrl,
+      uploadedMusicPath: musicFile?.path,
+      fps: dto.fps,
+      youtubeResolution: dto.youtubeResolution ?? VideoResolution.FULL_HD_1080P,
+      reelsResolution: dto.reelsResolution ?? VideoResolution.FULL_HD_1080P,
+      scriptProvider: dto.scriptProvider,
+      imageProvider: dto.imageProvider,
     });
   }
 

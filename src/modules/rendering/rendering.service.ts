@@ -52,6 +52,7 @@ export class RenderingService {
       audioTracks,
       fps,
       outputPath,
+      backgroundAudioPath: request.backgroundAudioPath,
     });
 
     this.logger.log(

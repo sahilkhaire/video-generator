@@ -4,10 +4,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { VIDEO_QUEUE_TOKEN, VIDEO_JOB_NAME } from './constants/queue.constants';
 import {
   IVideoJobData,
-  IVideoJobResult,
+  IMusicVideoJobData,
+  IVideoQueueJobData,
+  IVideoQueueJobResult,
   IVideoJobStatusResponse,
   IEnqueueJobResponse,
   VideoJobStatus,
+  VideoJobType,
 } from '../../domain/interfaces/video-job.interface';
 import { VideoJobRepository } from '../database/repositories/video-job.repository';
 
@@ -17,13 +20,17 @@ export class QueueService {
 
   constructor(
     @Inject(VIDEO_QUEUE_TOKEN)
-    private readonly videoQueue: Queue<IVideoJobData, IVideoJobResult>,
+    private readonly videoQueue: Queue<IVideoQueueJobData, IVideoQueueJobResult>,
     private readonly videoJobRepository: VideoJobRepository,
   ) {}
 
   async enqueueVideoGeneration(data: IVideoJobData): Promise<IEnqueueJobResponse> {
+    const normalized: IVideoJobData = {
+      ...data,
+      jobType: VideoJobType.STANDARD,
+    };
     const jobId = uuidv4();
-    await this.videoQueue.add(VIDEO_JOB_NAME, data, {
+    await this.videoQueue.add(VIDEO_JOB_NAME, normalized, {
       jobId,
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },
@@ -32,9 +39,30 @@ export class QueueService {
     });
 
     // Persist job record to MongoDB so status is queryable beyond BullMQ TTL
-    await this.videoJobRepository.create(jobId, data);
+    await this.videoJobRepository.create(jobId, normalized);
 
-    this.logger.log(`Enqueued video job ${jobId} — topic: "${data.topic}"`);
+    this.logger.log(`Enqueued video job ${jobId} — topic: "${normalized.topic}"`);
+
+    return {
+      jobId,
+      status: VideoJobStatus.WAITING,
+      message: 'Video generation job queued successfully',
+    };
+  }
+
+  async enqueueMusicVisualStory(data: IMusicVideoJobData): Promise<IEnqueueJobResponse> {
+    const jobId = uuidv4();
+    await this.videoQueue.add(VIDEO_JOB_NAME, data, {
+      jobId,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 5000 },
+      removeOnComplete: { age: 3600 * 24 },
+      removeOnFail: { age: 3600 * 24 * 7 },
+    });
+
+    await this.videoJobRepository.createMusicVisualStory(jobId, data);
+
+    this.logger.log(`Enqueued music visual-story job ${jobId} — topic: "${data.topic}"`);
 
     return {
       jobId,
@@ -45,7 +73,7 @@ export class QueueService {
 
   async getJobStatus(jobId: string): Promise<IVideoJobStatusResponse | null> {
     const timeout = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 3000));
-    const job: Job<IVideoJobData, IVideoJobResult> | undefined = await Promise.race([
+    const job: Job<IVideoQueueJobData, IVideoQueueJobResult> | undefined = await Promise.race([
       this.videoQueue.getJob(jobId),
       timeout,
     ]);

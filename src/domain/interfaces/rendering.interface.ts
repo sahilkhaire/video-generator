@@ -97,5 +97,5 @@ export interface IRenderVideoRequest {
   fps?: number;
   outputPath?: string;
   showCaptions?: boolean;
+  backgroundAudioPath?: string;
 }
-

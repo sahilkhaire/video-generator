@@ -83,6 +83,7 @@ npm run start:dev
 ### Core
 
 - `POST /api/videos/generate` : enqueue video generation job
+- `POST /api/videos/generate-music-story` : enqueue visual-only storytelling job from a song (creates YouTube + Reels variants in one job)
 - `GET /api/videos/jobs/:jobId` : fetch job status/result
 - `GET /api/videos/providers` : active providers
 - `GET /api/videos/tts-voices` : voices for active TTS provider
@@ -105,6 +106,40 @@ ENABLE_PLAYGROUND_UI=true
 ```
 
 When disabled, `/api/ui` returns 404.
+
+## Music Visual Story Route
+
+Dedicated endpoint for your new use case: pure visual storytelling with song-only audio.
+
+- Route: `POST /api/videos/generate-music-story`
+- Input modes: multipart upload (`musicFile`) or existing `musicPath` or remote `musicUrl`
+- Output: one async job that renders both variants
+  - YouTube (`16:9`)
+  - Instagram Reels (`9:16`)
+- Captions/subtitles: disabled
+- Narration/TTS: disabled
+- Audio track: original song only
+- Provider override support (per request)
+  - `scriptProvider` (e.g. `openai`, `together-ai`)
+  - `imageProvider` (e.g. `dalle`, `together-ai`)
+
+Example JSON request (path/url mode):
+
+```json
+{
+  "topic": "A hopeful journey from struggle to success",
+  "lyrics": "...optional lyrics guidance...",
+  "musicUrl": "https://example.com/song.mp3",
+  "style": "cartoon",
+  "scriptProvider": "together-ai",
+  "imageProvider": "together-ai",
+  "youtubeResolution": "1080p",
+  "reelsResolution": "1080p",
+  "fps": 30
+}
+```
+
+Result is available via `GET /api/videos/jobs/:jobId` and includes both output variants when completed.
 
 ## Aspect Ratio Behavior
 

@@ -33,7 +33,8 @@ export class FrameComposerService {
   constructor(private readonly configService: ConfigService) {}
 
   async composeFrame(options: IComposeFrameOptions): Promise<IComposedFrame> {
-    const { sceneId, sequenceNumber, image, narration, duration, style, resolution, showCaptions } = options;
+    const { sceneId, sequenceNumber, image, narration, duration, style, resolution, showCaptions } =
+      options;
     const { width, height } = resolution;
 
     this.logger.debug(`Composing frame for scene ${sequenceNumber} (${width}x${height})`);

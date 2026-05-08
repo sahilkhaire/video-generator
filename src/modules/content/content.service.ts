@@ -21,6 +21,8 @@ import { CostTrackingService } from '../cost/cost-tracking.service';
 import { ContentType } from '../../domain/interfaces/cost-tracking.interface';
 import { CacheKeyService } from '../cache/cache-key.service';
 import { ContentCacheService } from '../cache/content-cache.service';
+import { ImageProvider, ScriptProvider } from '../../config/providers.config';
+import { ProviderResolverService } from './provider-resolver.service';
 
 export interface ISceneAssets {
   sceneId: string;
@@ -52,6 +54,7 @@ export class ContentService {
     private readonly costTrackingService: CostTrackingService,
     private readonly cacheKeyService: CacheKeyService,
     private readonly contentCacheService: ContentCacheService,
+    private readonly providerResolverService: ProviderResolverService,
   ) {}
 
   private lookupCostRate(contentType: ContentType, providerName: string): number {
@@ -60,6 +63,13 @@ export class ContentService {
   }
 
   async generateScript(request: GenerateScriptRequestDto): Promise<IVideoScript> {
+    return this.generateScriptWithProvider(request);
+  }
+
+  async generateScriptWithProvider(
+    request: GenerateScriptRequestDto,
+    providerOverride?: ScriptProvider,
+  ): Promise<IVideoScript> {
     const cacheKey = this.cacheKeyService.forScript(request);
     const cached = await this.contentCacheService.get<IVideoScript>(cacheKey);
     if (cached) {
@@ -68,9 +78,13 @@ export class ContentService {
     }
 
     const start = Date.now();
-    const providerName = this.scriptGenerator.getProviderName();
+    const scriptGenerator = this.providerResolverService.resolveScriptProvider(
+      providerOverride,
+      this.scriptGenerator,
+    );
+    const providerName = scriptGenerator.getProviderName();
     try {
-      const result = await this.scriptGenerator.generateScript(request);
+      const result = await scriptGenerator.generateScript(request);
       this.costTrackingService.recordCall({
         provider: providerName,
         contentType: ContentType.SCRIPT,
@@ -96,6 +110,13 @@ export class ContentService {
   }
 
   async generateImage(request: GenerateImageRequestDto): Promise<IGeneratedImage> {
+    return this.generateImageWithProvider(request);
+  }
+
+  async generateImageWithProvider(
+    request: GenerateImageRequestDto,
+    providerOverride?: ImageProvider,
+  ): Promise<IGeneratedImage> {
     const cacheKey = this.cacheKeyService.forImage(request);
     const cached = await this.contentCacheService.get<IGeneratedImage>(cacheKey);
     if (cached) {
@@ -104,9 +125,13 @@ export class ContentService {
     }
 
     const start = Date.now();
-    const providerName = this.imageGenerator.getProviderName();
+    const imageGenerator = this.providerResolverService.resolveImageProvider(
+      providerOverride,
+      this.imageGenerator,
+    );
+    const providerName = imageGenerator.getProviderName();
     try {
-      const result = await this.imageGenerator.generateImage(request);
+      const result = await imageGenerator.generateImage(request);
       this.costTrackingService.recordCall({
         provider: providerName,
         contentType: ContentType.IMAGE,

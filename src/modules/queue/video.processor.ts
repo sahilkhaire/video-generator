@@ -3,14 +3,20 @@ import { ConfigService } from '@nestjs/config';
 import { Worker, Job } from 'bullmq';
 import { VideoService } from '../video/video.service';
 import { VIDEO_QUEUE_NAME } from './constants/queue.constants';
-import { IVideoJobData, IVideoJobResult } from '../../domain/interfaces/video-job.interface';
+import {
+  IVideoJobData,
+  IMusicVideoJobData,
+  IVideoQueueJobData,
+  IVideoQueueJobResult,
+  VideoJobType,
+} from '../../domain/interfaces/video-job.interface';
 import { GenerateVideoRequestDto } from '../../domain/dto/generate-video.dto';
 import { VideoJobRepository } from '../database/repositories/video-job.repository';
 
 @Injectable()
 export class VideoProcessor implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(VideoProcessor.name);
-  private worker: Worker<IVideoJobData, IVideoJobResult> | null = null;
+  private worker: Worker<IVideoQueueJobData, IVideoQueueJobResult> | null = null;
 
   constructor(
     private readonly videoService: VideoService,
@@ -35,9 +41,9 @@ export class VideoProcessor implements OnModuleInit, OnModuleDestroy {
       this.configService.get<number>('video.queue.maxStalledCount', 3),
     );
 
-    this.worker = new Worker<IVideoJobData, IVideoJobResult>(
+    this.worker = new Worker<IVideoQueueJobData, IVideoQueueJobResult>(
       VIDEO_QUEUE_NAME,
-      async (job: Job<IVideoJobData, IVideoJobResult>) => this.process(job),
+      async (job: Job<IVideoQueueJobData, IVideoQueueJobResult>) => this.process(job),
       {
         connection: { host: redisHost, port: redisPort },
         concurrency,
@@ -71,22 +77,32 @@ export class VideoProcessor implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async process(job: Job<IVideoJobData, IVideoJobResult>): Promise<IVideoJobResult> {
+  async process(job: Job<IVideoQueueJobData, IVideoQueueJobResult>): Promise<IVideoQueueJobResult> {
     this.logger.log(`Processing job ${job.id} — topic: "${job.data.topic}"`);
 
     await job.updateProgress(5);
     await this.videoJobRepository.markActive(job.id ?? '');
 
+    if (job.data.jobType === VideoJobType.MUSIC_VISUAL_STORY) {
+      const musicData = job.data as IMusicVideoJobData;
+      const musicResult = await this.videoService.generateMusicVisualStory(musicData);
+      await job.updateProgress(100);
+      await this.videoJobRepository.updateProgress(job.id ?? '', 100);
+      await this.videoJobRepository.markCompleted(job.id ?? '', musicResult);
+      return musicResult;
+    }
+
+    const standardData = job.data as IVideoJobData;
     const request: GenerateVideoRequestDto = {
-      topic: job.data.topic,
-      platform: job.data.platform,
-      style: job.data.style,
-      targetDuration: job.data.targetDuration,
-      targetAudience: job.data.targetAudience,
-      additionalContext: job.data.additionalContext,
-      resolution: job.data.resolution,
-      aspectRatio: job.data.aspectRatio,
-      fps: job.data.fps,
+      topic: standardData.topic,
+      platform: standardData.platform,
+      style: standardData.style,
+      targetDuration: standardData.targetDuration,
+      targetAudience: standardData.targetAudience,
+      additionalContext: standardData.additionalContext,
+      resolution: standardData.resolution,
+      aspectRatio: standardData.aspectRatio,
+      fps: standardData.fps,
     };
 
     await job.updateProgress(10);
@@ -97,7 +113,7 @@ export class VideoProcessor implements OnModuleInit, OnModuleDestroy {
     await job.updateProgress(100);
     await this.videoJobRepository.updateProgress(job.id ?? '', 100);
 
-    const result: IVideoJobResult = {
+    const result: IVideoQueueJobResult = {
       videoPath: generationResult.video.videoPath,
       title: generationResult.title,
       description: generationResult.description,

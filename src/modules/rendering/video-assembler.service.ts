@@ -21,6 +21,7 @@ export interface IAssembleVideoOptions {
   }>;
   fps: number;
   outputPath?: string;
+  backgroundAudioPath?: string;
 }
 
 interface ISceneClip {
@@ -84,7 +85,11 @@ export class VideoAssemblerService {
     const sceneClips = await this.createSceneClips(sortedFrames, fps, tempDir, motionConfig);
 
     // Step 2: Merge all audio tracks into one, or skip if none
-    const mergedAudioPath = await this.mergeAudioTracks(audioTracks, tempDir);
+    const mergedAudioPath = await this.mergeAudioTracks(
+      audioTracks,
+      tempDir,
+      options.backgroundAudioPath,
+    );
 
     // Step 3: Assemble scene clips + audio into final video
     const renderedDuration = await this.runFFmpegWithSceneClips(
@@ -155,9 +160,7 @@ export class VideoAssemblerService {
     const hasCaption = Boolean(frame.captionPath);
 
     await new Promise<void>((resolve, reject) => {
-      const cmd = ffmpeg()
-        .input(this.toAbsolutePath(frame.framePath))
-        .inputOptions(['-loop 1']);
+      const cmd = ffmpeg().input(this.toAbsolutePath(frame.framePath)).inputOptions(['-loop 1']);
 
       if (hasCaption) {
         // Input the transparent caption PNG and keep it looped for the clip duration.
@@ -166,10 +169,7 @@ export class VideoAssemblerService {
           .inputOptions(['-loop 1'])
           // Step 1: animate the background image (zoompan)
           // Step 2: overlay the static caption on top — caption does NOT move
-          .complexFilter([
-            `[0:v]${motionFilter}[bg]`,
-            `[bg][1:v]overlay=0:0[out]`,
-          ])
+          .complexFilter([`[0:v]${motionFilter}[bg]`, `[bg][1:v]overlay=0:0[out]`])
           .outputOptions([
             `-map [out]`,
             `-r ${fps}`,
@@ -226,7 +226,16 @@ export class VideoAssemblerService {
       audio?: IGeneratedAudio;
     }>,
     tempDir: string,
+    backgroundAudioPath?: string,
   ): Promise<string | null> {
+    if (backgroundAudioPath) {
+      const normalizedBackgroundPath = this.toAbsolutePath(backgroundAudioPath);
+      if (await this.fileExists(normalizedBackgroundPath)) {
+        return normalizedBackgroundPath;
+      }
+      this.logger.warn(`Background audio not found: ${normalizedBackgroundPath}`);
+    }
+
     const candidateTracks = [...audioTracks]
       .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
       .filter((t) => t.audio?.filePath)
@@ -349,7 +358,9 @@ export class VideoAssemblerService {
       return totalDuration;
     }
 
-    const transitionBySceneId = new Map(audioTracks.map((track) => [track.sceneId, track.transition]));
+    const transitionBySceneId = new Map(
+      audioTracks.map((track) => [track.sceneId, track.transition]),
+    );
     const transitionDurations: number[] = [];
 
     for (let i = 1; i < sortedSceneClips.length; i += 1) {
@@ -371,7 +382,8 @@ export class VideoAssemblerService {
       let previousLabel = '[0:v]';
 
       for (let i = 1; i < sortedSceneClips.length; i += 1) {
-        const transition = transitionBySceneId.get(sortedSceneClips[i - 1].sceneId) ?? SceneTransition.FADE;
+        const transition =
+          transitionBySceneId.get(sortedSceneClips[i - 1].sceneId) ?? SceneTransition.FADE;
         const effect = this.mapSceneTransitionToXFade(transition);
         const transitionDuration = transitionDurations[i - 1];
         const transitionOffset = Math.max(0, cumulativeOffset - transitionDuration);
@@ -432,7 +444,10 @@ export class VideoAssemblerService {
     return outputDuration;
   }
 
-  private async writeClipConcatFile(concatFilePath: string, sceneClips: ISceneClip[]): Promise<void> {
+  private async writeClipConcatFile(
+    concatFilePath: string,
+    sceneClips: ISceneClip[],
+  ): Promise<void> {
     const lines = sceneClips.map(
       (clip) => `file '${this.escapeForConcat(this.toAbsolutePath(clip.clipPath))}'`,
     );
@@ -460,7 +475,10 @@ export class VideoAssemblerService {
       zoomMin: this.configService.get<number>('video.motion.zoomMin', 1.0),
       zoomMax: this.configService.get<number>('video.motion.zoomMax', 1.12),
       panIntensity: this.configService.get<number>('video.motion.panIntensity', 0.035),
-      transitionDurationSec: this.configService.get<number>('video.motion.transitionDurationSec', 0.45),
+      transitionDurationSec: this.configService.get<number>(
+        'video.motion.transitionDurationSec',
+        0.45,
+      ),
       preset: this.configService.get<string>('video.motion.preset', 'fast'),
       crf: this.configService.get<number>('video.motion.crf', 21),
     };

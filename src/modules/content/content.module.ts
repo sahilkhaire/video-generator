@@ -18,6 +18,7 @@ import { IImageGenerator } from '../../domain/interfaces/image-generator.interfa
 import { ITTSProvider } from '../../domain/interfaces/tts-provider.interface';
 import { SCRIPT_GENERATOR, IMAGE_GENERATOR, TTS_PROVIDER } from './constants/injection-tokens';
 import { ScriptProvider, ImageProvider, TTSProvider } from '../../config/providers.config';
+import { ProviderResolverService } from './provider-resolver.service';
 
 @Module({
   imports: [ConfigModule, CostModule, CacheModule],
@@ -117,8 +118,9 @@ import { ScriptProvider, ImageProvider, TTSProvider } from '../../config/provide
       inject: [ConfigService, OpenAITTSProvider, ElevenLabsTTSProvider, EdgeTTSProvider],
     },
 
+    ProviderResolverService,
     ContentService,
   ],
-  exports: [ContentService],
+  exports: [ContentService, ProviderResolverService],
 })
 export class ContentModule {}

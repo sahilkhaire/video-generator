@@ -142,7 +142,10 @@ describe('VideoController', () => {
 
       // Assert
       expect(result.status).toBe(VideoJobStatus.COMPLETED);
-      expect(result.result?.videoPath).toBe('/storage/output.mp4');
+      if (!result.result || !('videoPath' in result.result)) {
+        throw new Error('Expected standard video result shape');
+      }
+      expect(result.result.videoPath).toBe('/storage/output.mp4');
     });
   });
 

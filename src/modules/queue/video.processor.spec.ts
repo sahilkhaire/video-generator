@@ -72,7 +72,18 @@ describe('VideoProcessor', () => {
       providers: [
         VideoProcessor,
         { provide: VideoService, useValue: mockVideoService },
-        { provide: VideoJobRepository, useValue: { save: jest.fn(), findById: jest.fn(), updateStatus: jest.fn(), markActive: jest.fn().mockResolvedValue(undefined), markCompleted: jest.fn().mockResolvedValue(undefined), markFailed: jest.fn().mockResolvedValue(undefined), updateProgress: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: VideoJobRepository,
+          useValue: {
+            save: jest.fn(),
+            findById: jest.fn(),
+            updateStatus: jest.fn(),
+            markActive: jest.fn().mockResolvedValue(undefined),
+            markCompleted: jest.fn().mockResolvedValue(undefined),
+            markFailed: jest.fn().mockResolvedValue(undefined),
+            updateProgress: jest.fn().mockResolvedValue(undefined),
+          },
+        },
         {
           provide: ConfigService,
           useValue: {
@@ -119,6 +130,9 @@ describe('VideoProcessor', () => {
           fps: jobData.fps,
         }),
       );
+      if (!('videoPath' in result)) {
+        throw new Error('Expected standard video result shape');
+      }
       expect(result.videoPath).toBe('/storage/output.mp4');
       expect(result.title).toBe('Photosynthesis Explained');
       expect(result.totalScenes).toBe(3);

@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import { VideoPlatform, VideoStyle } from '../../../domain/enums/video.enums';
-import { VideoJobStatus } from '../../../domain/interfaces/video-job.interface';
+import { VideoJobStatus, VideoJobType } from '../../../domain/interfaces/video-job.interface';
 import { VideoResolution, VideoAspectRatio } from '../../../domain/interfaces/rendering.interface';
 
 export type VideoJobDocument = HydratedDocument<VideoJob>;
@@ -38,6 +38,27 @@ export class VideoJob {
 
   @Prop()
   fps?: number;
+
+  @Prop({ enum: VideoJobType })
+  jobType?: VideoJobType;
+
+  @Prop()
+  lyrics?: string;
+
+  @Prop()
+  musicPath?: string;
+
+  @Prop()
+  musicUrl?: string;
+
+  @Prop()
+  uploadedMusicPath?: string;
+
+  @Prop()
+  scriptProvider?: string;
+
+  @Prop()
+  imageProvider?: string;
 
   // ── Lifecycle ─────────────────────────────────────────────────────
   @Prop({ required: true, enum: VideoJobStatus, default: VideoJobStatus.WAITING, index: true })

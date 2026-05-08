@@ -5,7 +5,9 @@ import { VideoJob, VideoJobDocument } from '../schemas/video-job.schema';
 import {
   VideoJobStatus,
   IVideoJobData,
+  IMusicVideoJobData,
   IVideoJobResult,
+  IMusicVideoJobResult,
 } from '../../../domain/interfaces/video-job.interface';
 
 @Injectable()
@@ -32,6 +34,26 @@ export class VideoJobRepository {
     });
   }
 
+  async createMusicVisualStory(jobId: string, data: IMusicVideoJobData): Promise<VideoJobDocument> {
+    return this.model.create({
+      jobId,
+      topic: data.topic,
+      platform: 'youtube',
+      style: data.style,
+      targetDuration: 0,
+      additionalContext: data.additionalContext,
+      jobType: data.jobType,
+      lyrics: data.lyrics,
+      musicPath: data.musicPath,
+      musicUrl: data.musicUrl,
+      uploadedMusicPath: data.uploadedMusicPath,
+      scriptProvider: data.scriptProvider,
+      imageProvider: data.imageProvider,
+      status: VideoJobStatus.WAITING,
+      progress: 0,
+    });
+  }
+
   async markActive(jobId: string): Promise<void> {
     await this.model.updateOne(
       { jobId },
@@ -43,7 +65,10 @@ export class VideoJobRepository {
     await this.model.updateOne({ jobId }, { $set: { progress } });
   }
 
-  async markCompleted(jobId: string, result: IVideoJobResult): Promise<void> {
+  async markCompleted(
+    jobId: string,
+    result: IVideoJobResult | IMusicVideoJobResult,
+  ): Promise<void> {
     await this.model.updateOne(
       { jobId },
       { $set: { status: VideoJobStatus.COMPLETED, progress: 100, result, finishedAt: new Date() } },

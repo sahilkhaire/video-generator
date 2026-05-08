@@ -62,7 +62,10 @@ describe('QueueService', () => {
       // Assert
       expect(mockQueue.add).toHaveBeenCalledWith(
         VIDEO_JOB_NAME,
-        data,
+        expect.objectContaining({
+          ...data,
+          jobType: 'standard',
+        }),
         expect.objectContaining({
           jobId: expect.any(String),
           attempts: 3,
