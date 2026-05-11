@@ -46,6 +46,7 @@ const refs = {
   targetDuration: document.getElementById('targetDuration'),
   targetAudience: document.getElementById('targetAudience'),
   additionalContext: document.getElementById('additionalContext'),
+  callbackUrl: document.getElementById('callbackUrl'),
   resolution: document.getElementById('resolution'),
   aspectRatio: document.getElementById('aspectRatio'),
   fps: document.getElementById('fps'),
@@ -75,6 +76,7 @@ const refs = {
   musicScriptProvider: document.getElementById('musicScriptProvider'),
   musicImageProvider: document.getElementById('musicImageProvider'),
   musicImageModel: document.getElementById('musicImageModel'),
+  musicCallbackUrl: document.getElementById('musicCallbackUrl'),
   musicFile: document.getElementById('musicFile'),
   musicUrl: document.getElementById('musicUrl'),
   musicPath: document.getElementById('musicPath'),
@@ -89,6 +91,7 @@ const refs = {
   contentImagesAspectRatio: document.getElementById('contentImagesAspectRatio'),
   contentImagesFps: document.getElementById('contentImagesFps'),
   contentImagesData: document.getElementById('contentImagesData'),
+  contentImagesCallbackUrl: document.getElementById('contentImagesCallbackUrl'),
   generateContentImagesBtn: document.getElementById('generateContentImagesBtn'),
   contentImagesStatus: document.getElementById('contentImagesStatus'),
 };
@@ -121,6 +124,7 @@ function applySample(sample) {
 
 function getPayload() {
   const voice = refs.voice.value.trim();
+  const callbackUrl = refs.callbackUrl.value.trim();
   return {
     topic: refs.topic.value.trim(),
     platform: refs.platform.value,
@@ -132,6 +136,7 @@ function getPayload() {
     aspectRatio: refs.aspectRatio.value,
     fps: Number(refs.fps.value),
     voice: voice || undefined,
+    callbackUrl: callbackUrl || undefined,
   };
 }
 
@@ -184,6 +189,8 @@ function getContentImagesPayload() {
 
   const voice = refs.contentImagesVoice.value.trim();
   if (voice) payload.voice = voice;
+  const callbackUrl = refs.contentImagesCallbackUrl.value.trim();
+  if (callbackUrl) payload.callbackUrl = callbackUrl;
   return payload;
 }
 
@@ -498,6 +505,8 @@ refs.enqueueMusicBtn.addEventListener('click', async () => {
       if (imageProvider) formData.append('imageProvider', imageProvider);
       const imageModel = refs.musicImageModel.value.trim();
       if (imageModel) formData.append('imageModel', imageModel);
+      const callbackUrl = refs.musicCallbackUrl.value.trim();
+      if (callbackUrl) formData.append('callbackUrl', callbackUrl);
       formData.append('musicFile', refs.musicFile.files[0]);
 
       const apiKey = refs.apiKey.value.trim();
@@ -527,6 +536,8 @@ refs.enqueueMusicBtn.addEventListener('click', async () => {
       if (imageProvider) payload.imageProvider = imageProvider;
       const imageModel = refs.musicImageModel.value.trim();
       if (imageModel) payload.imageModel = imageModel;
+      const callbackUrl = refs.musicCallbackUrl.value.trim();
+      if (callbackUrl) payload.callbackUrl = callbackUrl;
       if (hasUrl) payload.musicUrl = refs.musicUrl.value.trim();
       if (hasPath) payload.musicPath = refs.musicPath.value.trim();
 
