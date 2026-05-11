@@ -45,7 +45,7 @@ lerna-debug.log*
 /storage
 /temp
 /videos
-*.mp4
+# *.mp4
 *.mov
 *.avi
 *.mkv
