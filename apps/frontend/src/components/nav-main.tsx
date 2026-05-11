@@ -6,12 +6,14 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import type { AppView } from "@/components/app-sidebar"
+import type { AppView, CreateVideoMode } from "@/components/app-sidebar"
 
 export function NavMain({
   items,
   activeItem,
+  activeCreateMode,
   onSelect,
+  onCreateModeChange,
 }: {
   items: {
     label: string
@@ -19,10 +21,13 @@ export function NavMain({
       title: string
       key: AppView
       icon?: React.ReactNode
+      createMode?: CreateVideoMode
     }[]
   }[]
   activeItem: AppView
+  activeCreateMode: CreateVideoMode
   onSelect: (key: AppView) => void
+  onCreateModeChange: (mode: CreateVideoMode) => void
 }) {
   return (
     <SidebarGroup>
@@ -35,8 +40,19 @@ export function NavMain({
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     tooltip={item.title}
-                    isActive={activeItem === item.key}
-                    onClick={() => onSelect(item.key)}
+                    isActive={
+                      item.key === "generate" && item.createMode
+                        ? activeItem === "generate" && activeCreateMode === item.createMode
+                        : activeItem === item.key
+                    }
+                    onClick={() => {
+                      if (item.key === "generate" && item.createMode) {
+                        onCreateModeChange(item.createMode)
+                        return
+                      }
+
+                      onSelect(item.key)
+                    }}
                   >
                     {item.icon}
                     <span>{item.title}</span>

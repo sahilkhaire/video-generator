@@ -119,3 +119,40 @@ export interface MongoDetails {
     date: string;
   }>;
 }
+
+// Provider Models Types
+export interface ProviderModel {
+  id: string;
+  name: string;
+  displayName: string;
+  isDefault?: boolean;
+}
+
+export interface ProviderOption {
+  name: string;
+  displayName: string;
+  description?: string;
+  isDefault?: boolean;
+  models: ProviderModel[];
+}
+
+export interface ProviderToolGroup {
+  id: 'script' | 'image' | 'tts';
+  displayName: string;
+  description: string;
+  providers: ProviderOption[];
+}
+
+export interface ProvidersModels {
+  version?: string;
+  generatedAt?: string;
+  defaults?: {
+    script?: { provider: string; model: string };
+    image?: { provider: string; model: string };
+    tts?: { provider: string; model: string };
+  };
+  tools?: ProviderToolGroup[];
+  script: ProviderOption[];
+  image: ProviderOption[];
+  tts: ProviderOption[];
+}

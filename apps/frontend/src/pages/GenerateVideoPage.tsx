@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react"
-import { ChevronDown, ChevronUp, Download, Play, RotateCw, AlertCircle } from "lucide-react"
+import { ChevronDown, ChevronUp, Download, Play, RotateCw, AlertCircle, Loader } from "lucide-react"
 
 import { PageShell } from "@/components/dashboard/page-shell"
 import { StateMessage } from "@/components/dashboard/state-message"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -17,6 +17,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { apiClient } from "../api/client"
+import { useProviderSelection } from "@/hooks/useProviderSelection"
+import type { CreateVideoMode } from "@/components/app-sidebar"
 import {
   GenerateFromImagesRequest,
   GenerateMusicVideoRequest,
@@ -24,7 +26,7 @@ import {
   VideoJob,
 } from "../types/api"
 
-type GenerationType = "standard" | "content-images" | "music-story"
+type GenerationType = CreateVideoMode
 
 type ContentSegmentForm = {
   content: string
@@ -37,32 +39,6 @@ const VIDEO_STYLES = ["cartoon", "realistic", "animated", "minimal", "cinematic"
 const VIDEO_PLATFORMS = ["youtube", "instagram_reels", "tiktok"]
 const VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"]
 const VIDEO_ASPECT_RATIOS = ["16:9", "9:16", "1:1"]
-const SCRIPT_PROVIDERS = ["openai", "claude", "ollama", "together-ai", "groq"]
-const IMAGE_PROVIDERS = ["dalle", "stable-diffusion", "leonardo", "together-ai"]
-
-// Cost estimation (USD)
-const PROVIDER_COSTS = {
-  script: {
-    openai: 0.05,
-    claude: 0.02,
-    ollama: 0.0,
-    "together-ai": 0.002,
-    groq: 0.001,
-  },
-  image: {
-    dalle: 0.04,
-    "stable-diffusion": 0.002,
-    leonardo: 0.01,
-    "together-ai": 0.003,
-  },
-  tts: {
-    openai: 0.015,
-    elevenlabs: 0.03,
-    "google-tts": 0.004,
-    coqui: 0.0,
-    groq: 0.008,
-  },
-}
 
 // Validation helpers
 const ValidationErrors = {
@@ -74,8 +50,37 @@ const ValidationErrors = {
   contextLength: () => "Additional context must be max 500 characters",
 }
 
-export default function GenerateVideoPage() {
-  const [activeTab, setActiveTab] = useState<GenerationType>("standard")
+export default function GenerateVideoPage({
+  initialTab = "standard",
+  onTabChange,
+}: {
+  initialTab?: GenerationType
+  onTabChange?: (tab: GenerationType) => void
+}) {
+  // Load dynamic provider configuration
+  const {
+    loading: providersLoading,
+    scriptProvider,
+    setScriptProvider,
+    scriptProviders,
+    scriptModels,
+    scriptModel,
+    setScriptModel,
+    imageProvider,
+    setImageProvider,
+    imageProviders,
+    imageModels,
+    imageModel,
+    setImageModel,
+    ttsProvider,
+    setTtsProvider,
+    ttsProviders,
+    ttsModels,
+    ttsModel,
+    setTtsModel,
+  } = useProviderSelection()
+
+  const [activeTab, setActiveTab] = useState<GenerationType>(initialTab)
   const [expandAdvanced, setExpandAdvanced] = useState<Record<GenerationType, boolean>>({
     standard: false,
     "content-images": false,
@@ -132,8 +137,8 @@ export default function GenerateVideoPage() {
     musicPath: "",
     musicUrl: "",
     style: "cartoon",
-    scriptProvider: "openai",
-    imageProvider: "dalle",
+    scriptProvider: scriptProvider || undefined,
+    imageProvider: imageProvider || undefined,
     imageModel: "",
     youtubeResolution: "1080p",
     reelsResolution: "1080p",
@@ -168,6 +173,23 @@ export default function GenerateVideoPage() {
 
     return () => clearInterval(interval)
   }, [autoRefresh, job])
+
+  useEffect(() => {
+    setActiveTab(initialTab)
+  }, [initialTab])
+
+  // Sync music request with selected providers from hook
+  useEffect(() => {
+    if (scriptProvider) {
+      setMusicRequest((prev) => ({ ...prev, scriptProvider }))
+    }
+  }, [scriptProvider])
+
+  useEffect(() => {
+    if (imageProvider) {
+      setMusicRequest((prev) => ({ ...prev, imageProvider }))
+    }
+  }, [imageProvider])
 
   const updateStandard = <K extends keyof GenerateVideoRequest>(
     key: K,
@@ -225,18 +247,10 @@ export default function GenerateVideoPage() {
     if (data.fps && (data.fps < 24 || data.fps > 60)) {
       errors.fps = ValidationErrors.fpsRange()
     }
+    if (data.additionalContext && data.additionalContext.length > 500) {
+      errors.context = ValidationErrors.contextLength()
+    }
     setValidationErrors(errors)
-  }
-
-  const estimateCost = (scriptProvider?: string, imageProvider?: string): number => {
-    let cost = 0
-    if (scriptProvider && scriptProvider in PROVIDER_COSTS.script) {
-      cost += PROVIDER_COSTS.script[scriptProvider as keyof typeof PROVIDER_COSTS.script]
-    }
-    if (imageProvider && imageProvider in PROVIDER_COSTS.image) {
-      cost += PROVIDER_COSTS.image[imageProvider as keyof typeof PROVIDER_COSTS.image]
-    }
-    return cost
   }
 
   const syncContentDataPayload = (segments: ContentSegmentForm[]) => {
@@ -278,8 +292,16 @@ export default function GenerateVideoPage() {
       !!musicRequest.musicUrl?.trim()
     const topicValid = musicRequest.topic.trim().length >= 10 && musicRequest.topic.trim().length <= 500
     const fpsValid = !musicRequest.fps || (musicRequest.fps >= 24 && musicRequest.fps <= 60)
-    return topicValid && hasSource && fpsValid
-  }, [musicRequest.musicFile, musicRequest.musicPath, musicRequest.musicUrl, musicRequest.topic, musicRequest.fps])
+    const contextValid = !musicRequest.additionalContext || musicRequest.additionalContext.length <= 500
+    return topicValid && hasSource && fpsValid && contextValid
+  }, [
+    musicRequest.additionalContext,
+    musicRequest.fps,
+    musicRequest.musicFile,
+    musicRequest.musicPath,
+    musicRequest.musicUrl,
+    musicRequest.topic,
+  ])
 
   const handleStandardSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -385,17 +407,189 @@ export default function GenerateVideoPage() {
     setError(null)
   }
 
+  const handleTabChange = (value: string) => {
+    const nextTab = value as GenerationType
+    setActiveTab(nextTab)
+    setValidationErrors({})
+    onTabChange?.(nextTab)
+  }
+
+  const parsedContentImageCount = contentImageSegments.reduce((total, segment) => {
+    const parsedCount = segment.imagesText
+      .split(/\n|,/)
+      .map((url) => url.trim())
+      .filter(Boolean).length
+    return total + parsedCount
+  }, 0)
+
+  const sampleTitleByTab: Record<GenerationType, string> = {
+    standard: standardRequest.topic.trim() || "Your scripted concept appears here",
+    "content-images":
+      contentImageSegments[0]?.content.trim() || "Your first segment summary appears here",
+    "music-story": musicRequest.topic.trim() || "Your music visual story appears here",
+  }
+
+  const hasMusicSource =
+    !!musicRequest.musicFile || !!musicRequest.musicPath?.trim() || !!musicRequest.musicUrl?.trim()
+
   return (
     <PageShell
       title="Generate Video"
       description="Choose a generation mode and submit all API fields directly from the UI."
     >
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as GenerationType)}>
-        <TabsList>
-          <TabsTrigger value="standard">Standard</TabsTrigger>
-          <TabsTrigger value="content-images">Content + Images</TabsTrigger>
-          <TabsTrigger value="music-story">Music Story</TabsTrigger>
-        </TabsList>
+        <div className="grid gap-6 lg:grid-cols-[1fr_350px]">
+          {/* Left Side - Form */}
+          <div className="space-y-4">
+        {/* Provider Selection Section */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">AI Provider Configuration</CardTitle>
+            <CardDescription className="text-xs">Select the AI providers and models for your video generation</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {providersLoading ? (
+              <div className="flex items-center justify-center gap-2 py-12">
+                <Loader className="w-5 h-5 animate-spin" />
+                <span className="text-sm text-muted-foreground">Loading providers...</span>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-3">
+                {/* LLM / Script Provider */}
+                <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-linear-to-br from-blue-50 to-transparent dark:from-blue-950 dark:to-transparent p-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded-md bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400 font-semibold text-xs">
+                      AI
+                    </div>
+                    <h3 className="font-semibold text-sm">LLM</h3>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="llm-provider" className="text-xs font-medium text-muted-foreground">Provider</Label>
+                      <Select value={scriptProvider || ""} onValueChange={setScriptProvider}>
+                        <SelectTrigger id="llm-provider" className="text-sm h-9">
+                          <SelectValue placeholder="Select provider" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {scriptProviders.map((provider) => (
+                            <SelectItem key={provider.name} value={provider.name}>
+                              {provider.displayName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="llm-model" className="text-xs font-medium text-muted-foreground">Model</Label>
+                      <Select value={scriptModel || ""} onValueChange={setScriptModel}>
+                        <SelectTrigger id="llm-model" className="text-sm h-9">
+                          <SelectValue placeholder="Select model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {scriptModels.map((model) => (
+                            <SelectItem key={model.id} value={model.id}>
+                              {model.displayName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Image Provider */}
+                <div className="rounded-lg border border-purple-200 dark:border-purple-800 bg-linear-to-br from-purple-50 to-transparent dark:from-purple-950 dark:to-transparent p-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded-md bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-600 dark:text-purple-400 font-semibold text-xs">
+                      🖼
+                    </div>
+                    <h3 className="font-semibold text-sm">Images</h3>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="image-provider" className="text-xs font-medium text-muted-foreground">Provider</Label>
+                      <Select value={imageProvider || ""} onValueChange={setImageProvider}>
+                        <SelectTrigger id="image-provider" className="text-sm h-9">
+                          <SelectValue placeholder="Select provider" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {imageProviders.map((provider) => (
+                            <SelectItem key={provider.name} value={provider.name}>
+                              {provider.displayName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="image-model" className="text-xs font-medium text-muted-foreground">Model</Label>
+                      <Select value={imageModel || ""} onValueChange={setImageModel}>
+                        <SelectTrigger id="image-model" className="text-sm h-9">
+                          <SelectValue placeholder="Select model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {imageModels.map((model) => (
+                            <SelectItem key={model.id} value={model.id}>
+                              {model.displayName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* TTS Provider */}
+                <div className="rounded-lg border border-green-200 dark:border-green-800 bg-linear-to-br from-green-50 to-transparent dark:from-green-950 dark:to-transparent p-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded-md bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 dark:text-green-400 font-semibold text-xs">
+                      🔊
+                    </div>
+                    <h3 className="font-semibold text-sm">Voice</h3>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="tts-provider" className="text-xs font-medium text-muted-foreground">Provider</Label>
+                      <Select value={ttsProvider || ""} onValueChange={setTtsProvider}>
+                        <SelectTrigger id="tts-provider" className="text-sm h-9">
+                          <SelectValue placeholder="Select provider" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ttsProviders.map((provider) => (
+                            <SelectItem key={provider.name} value={provider.name}>
+                              {provider.displayName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="tts-model" className="text-xs font-medium text-muted-foreground">Model</Label>
+                      <Select value={ttsModel || ""} onValueChange={setTtsModel}>
+                        <SelectTrigger id="tts-model" className="text-sm h-9">
+                          <SelectValue placeholder="Select model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ttsModels.map((model) => (
+                            <SelectItem key={model.id} value={model.id}>
+                              {model.displayName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
+          <TabsList className="h-auto w-full flex-wrap justify-start sm:w-fit sm:flex-nowrap">
+            <TabsTrigger value="standard">Standard</TabsTrigger>
+            <TabsTrigger value="content-images">Content + Images</TabsTrigger>
+            <TabsTrigger value="music-story">Music Story</TabsTrigger>
+          </TabsList>
 
         <TabsContent value="standard">
           <Card>
@@ -408,7 +602,7 @@ export default function GenerateVideoPage() {
                   <div className="flex items-center justify-between">
                     <Label htmlFor="standard-topic">Topic * {standardRequest.topic.length}/500</Label>
                     {validationErrors.topic && (
-                      <span className="flex items-center gap-1 text-xs text-destructive">
+                      <span id="standard-topic-error" className="flex items-center gap-1 text-xs text-destructive" role="alert">
                         <AlertCircle className="w-3 h-3" /> {validationErrors.topic}
                       </span>
                     )}
@@ -419,6 +613,8 @@ export default function GenerateVideoPage() {
                     onChange={(e) => updateStandard("topic", e.target.value)}
                     placeholder="10-500 characters, describe your video concept"
                     className={`min-h-24 ${validationErrors.topic ? "border-destructive" : ""}`}
+                    aria-invalid={Boolean(validationErrors.topic)}
+                    aria-describedby={validationErrors.topic ? "standard-topic-error" : undefined}
                     required
                   />
                 </div>
@@ -449,7 +645,7 @@ export default function GenerateVideoPage() {
                     <div className="flex items-center justify-between">
                       <Label htmlFor="standard-target-duration">Duration (s) *</Label>
                       {validationErrors.duration && (
-                        <span className="text-xs text-destructive">{validationErrors.duration}</span>
+                        <span id="standard-duration-error" className="text-xs text-destructive" role="alert">{validationErrors.duration}</span>
                       )}
                     </div>
                     <Input
@@ -460,6 +656,8 @@ export default function GenerateVideoPage() {
                       value={standardRequest.targetDuration}
                       onChange={(e) => updateStandard("targetDuration", Number(e.target.value))}
                       className={validationErrors.duration ? "border-destructive" : ""}
+                      aria-invalid={Boolean(validationErrors.duration)}
+                      aria-describedby={validationErrors.duration ? "standard-duration-error" : undefined}
                       required
                     />
                   </div>
@@ -537,7 +735,7 @@ export default function GenerateVideoPage() {
                     <div className="flex items-center justify-between">
                       <Label htmlFor="standard-fps">FPS</Label>
                       {validationErrors.fps && (
-                        <span className="text-xs text-destructive">{validationErrors.fps}</span>
+                        <span id="standard-fps-error" className="text-xs text-destructive" role="alert">{validationErrors.fps}</span>
                       )}
                     </div>
                     <Input
@@ -548,6 +746,8 @@ export default function GenerateVideoPage() {
                       value={standardRequest.fps ?? 30}
                       onChange={(e) => updateStandard("fps", Number(e.target.value))}
                       className={validationErrors.fps ? "border-destructive" : ""}
+                      aria-invalid={Boolean(validationErrors.fps)}
+                      aria-describedby={validationErrors.fps ? "standard-fps-error" : undefined}
                     />
                   </div>
                 </div>
@@ -830,7 +1030,7 @@ export default function GenerateVideoPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="content-show-captions">showCaptions</Label>
+                    <Label htmlFor="content-show-captions">Show Captions</Label>
                     <Select
                       value={String(contentImagesRequest.showCaptions ?? true)}
                       onValueChange={(value) =>
@@ -845,10 +1045,13 @@ export default function GenerateVideoPage() {
                         <SelectItem value="false">No</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Displays synced captions across the generated video.
+                    </p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="content-show-caption">showCaption</Label>
+                    <Label htmlFor="content-show-caption">Single Caption Overlay</Label>
                     <Select
                       value={String(contentImagesRequest.showCaption ?? true)}
                       onValueChange={(value) => updateContentImages("showCaption", value === "true")}
@@ -861,6 +1064,9 @@ export default function GenerateVideoPage() {
                         <SelectItem value="false">No</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Toggles one compact caption track for each scene.
+                    </p>
                   </div>
                 </div>
 
@@ -906,11 +1112,18 @@ export default function GenerateVideoPage() {
                   )}
                 </div>
 
-                <Button type="submit" disabled={loading || !canSubmitContentImages}>
-                  {loading && lastMode === "content-images"
-                    ? "Submitting..."
-                    : "Generate From Content + Images"}
-                </Button>
+                <div className="space-y-1">
+                  <Button type="submit" disabled={loading || !canSubmitContentImages}>
+                    {loading && lastMode === "content-images"
+                      ? "Submitting..."
+                      : "Generate From Content + Images"}
+                  </Button>
+                  {!canSubmitContentImages ? (
+                    <p className="text-xs text-muted-foreground">
+                      Add at least one segment with narration and at least one image URL.
+                    </p>
+                  ) : null}
+                </div>
               </form>
             </CardContent>
           </Card>
@@ -927,7 +1140,7 @@ export default function GenerateVideoPage() {
                   <div className="flex items-center justify-between">
                     <Label htmlFor="music-topic">Topic * {musicRequest.topic.length}/500</Label>
                     {validationErrors.topic && (
-                      <span className="flex items-center gap-1 text-xs text-destructive">
+                      <span id="music-topic-error" className="flex items-center gap-1 text-xs text-destructive" role="alert">
                         <AlertCircle className="w-3 h-3" /> {validationErrors.topic}
                       </span>
                     )}
@@ -938,6 +1151,8 @@ export default function GenerateVideoPage() {
                     onChange={(e) => updateMusic("topic", e.target.value)}
                     placeholder="10-500 characters, describe your music visual story"
                     className={`min-h-24 ${validationErrors.topic ? "border-destructive" : ""}`}
+                    aria-invalid={Boolean(validationErrors.topic)}
+                    aria-describedby={validationErrors.topic ? "music-topic-error" : undefined}
                     required
                   />
                 </div>
@@ -955,10 +1170,15 @@ export default function GenerateVideoPage() {
 
                 {/* Music Input Selection */}
                 <div className="border-t pt-4 space-y-3">
-                  <Label className="text-base">Music Source *</Label>
-                  <div className="grid gap-3 md:grid-cols-3">
+                  <Label id="music-source-group-label" className="text-base">Music Source *</Label>
+                  <div
+                    className="grid gap-3 md:grid-cols-3"
+                    role="radiogroup"
+                    aria-labelledby="music-source-group-label"
+                  >
                     {["file", "path", "url"].map((type) => (
-                      <div
+                      <button
+                        type="button"
                         key={type}
                         onClick={() => {
                           setMusicInputType(type as MusicInputType)
@@ -966,24 +1186,18 @@ export default function GenerateVideoPage() {
                           updateMusic("musicPath", "")
                           updateMusic("musicUrl", "")
                         }}
+                        role="radio"
+                        aria-checked={musicInputType === type}
                         className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
                           musicInputType === type
                             ? "border-primary bg-primary/5"
                             : "border-muted hover:border-primary/50"
                         }`}
                       >
-                        <input
-                          type="radio"
-                          name="music-input-type"
-                          value={type}
-                          checked={musicInputType === type}
-                          onChange={() => {}}
-                          className="cursor-pointer"
-                        />
-                        <label className="ml-2 cursor-pointer font-medium capitalize text-sm">
+                        <span className="font-medium capitalize text-sm">
                           {type === "file" ? "Upload File" : type === "path" ? "Local Path" : "Remote URL"}
-                        </label>
-                      </div>
+                        </span>
+                      </button>
                     ))}
                   </div>
 
@@ -1051,66 +1265,110 @@ export default function GenerateVideoPage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="music-script-provider">Script Provider</Label>
-                    <Select
-                      value={musicRequest.scriptProvider}
-                      onValueChange={(value) => updateMusic("scriptProvider", value)}
-                    >
-                      <SelectTrigger id="music-script-provider">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SCRIPT_PROVIDERS.map((provider) => (
-                          <SelectItem key={provider} value={provider}>
-                            {provider}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {providersLoading ? (
+                      <div className="flex items-center gap-2 p-2 text-sm text-muted-foreground">
+                        <Loader className="w-4 h-4 animate-spin" />
+                        Loading providers...
+                      </div>
+                    ) : (
+                      <Select
+                        value={scriptProvider || ""}
+                        onValueChange={setScriptProvider}
+                      >
+                        <SelectTrigger id="music-script-provider">
+                          <SelectValue placeholder="Select script provider" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {scriptProviders.map((provider) => (
+                            <SelectItem key={provider.name} value={provider.name}>
+                              {provider.displayName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="music-script-model">Script Model</Label>
+                    {providersLoading ? (
+                      <div className="flex items-center gap-2 p-2 text-sm text-muted-foreground">
+                        <Loader className="w-4 h-4 animate-spin" />
+                        Loading models...
+                      </div>
+                    ) : (
+                      <Select
+                        value={scriptModel || ""}
+                        onValueChange={setScriptModel}
+                      >
+                        <SelectTrigger id="music-script-model">
+                          <SelectValue placeholder="Select script model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {scriptModels.map((model) => (
+                            <SelectItem key={model.id} value={model.id}>
+                              {model.displayName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="music-image-provider">Image Provider</Label>
-                    <Select
-                      value={musicRequest.imageProvider}
-                      onValueChange={(value) => updateMusic("imageProvider", value)}
-                    >
-                      <SelectTrigger id="music-image-provider">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {IMAGE_PROVIDERS.map((provider) => (
-                          <SelectItem key={provider} value={provider}>
-                            {provider}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {providersLoading ? (
+                      <div className="flex items-center gap-2 p-2 text-sm text-muted-foreground">
+                        <Loader className="w-4 h-4 animate-spin" />
+                        Loading providers...
+                      </div>
+                    ) : (
+                      <Select
+                        value={imageProvider || ""}
+                        onValueChange={setImageProvider}
+                      >
+                        <SelectTrigger id="music-image-provider">
+                          <SelectValue placeholder="Select image provider" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {imageProviders.map((provider) => (
+                            <SelectItem key={provider.name} value={provider.name}>
+                              {provider.displayName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 </div>
-
-                {/* Cost Estimation */}
-                {estimateCost(musicRequest.scriptProvider, musicRequest.imageProvider) > 0 && (
-                  <div className="rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-3">
-                    <p className="text-sm">
-                      <span className="font-semibold">Estimated Cost:</span> ${estimateCost(
-                        musicRequest.scriptProvider,
-                        musicRequest.imageProvider
-                      ).toFixed(3)}{" "}
-                      ({musicRequest.scriptProvider} script + {musicRequest.imageProvider} images)
-                    </p>
-                  </div>
-                )}
 
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="music-image-model">Image Model</Label>
-                    <Input
-                      id="music-image-model"
-                      value={musicRequest.imageModel}
-                      onChange={(e) => updateMusic("imageModel", e.target.value)}
-                      placeholder="e.g., dall-e-3, sd-xl"
-                    />
+                    {providersLoading ? (
+                      <div className="flex items-center gap-2 p-2 text-sm text-muted-foreground">
+                        <Loader className="w-4 h-4 animate-spin" />
+                        Loading models...
+                      </div>
+                    ) : (
+                      <Select
+                        value={imageModel || ""}
+                        onValueChange={setImageModel}
+                      >
+                        <SelectTrigger id="music-image-model">
+                          <SelectValue placeholder="Select image model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {imageModels.map((model) => (
+                            <SelectItem key={model.id} value={model.id}>
+                              {model.displayName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="music-youtube-resolution">YouTube Resolution</Label>
                     <Select
@@ -1224,14 +1482,140 @@ export default function GenerateVideoPage() {
                   )}
                 </div>
 
-                <Button type="submit" disabled={loading || !canSubmitMusic}>
-                  {loading && lastMode === "music-story" ? "Submitting..." : "Generate Music Story"}
-                </Button>
+                <div className="space-y-1">
+                  <Button type="submit" disabled={loading || !canSubmitMusic}>
+                    {loading && lastMode === "music-story" ? "Submitting..." : "Generate Music Story"}
+                  </Button>
+                  {!hasMusicSource ? (
+                    <p className="text-xs text-muted-foreground">
+                      Choose one music source: file upload, local path, or remote URL.
+                    </p>
+                  ) : null}
+                </div>
               </form>
             </CardContent>
           </Card>
         </TabsContent>
-      </Tabs>
+        </Tabs>
+
+          </div>
+
+        {/* Right Side - Video Preview */}
+        <Card className="h-fit xl:sticky xl:top-4">
+          <CardHeader>
+            <CardTitle className="text-base">Live Preview</CardTitle>
+            <CardDescription className="text-xs">Real-time summary based on your form inputs</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-xl border bg-linear-to-br from-primary/15 via-primary/5 to-background p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {activeTab === "standard"
+                  ? "Standard Builder"
+                  : activeTab === "content-images"
+                    ? "Content + Images Builder"
+                    : "Music Story Builder"}
+              </p>
+              <p className="mt-2 text-sm font-semibold leading-snug">
+                {sampleTitleByTab[activeTab].slice(0, 140)}
+              </p>
+            </div>
+
+              {/* Video Dimensions Preview */}
+              {activeTab === "standard" && (
+                <div className="space-y-3 border-t pt-4">
+                  <div className="text-xs font-medium text-muted-foreground">Video Size</div>
+                  {standardRequest.platform === "youtube" && (
+                    <div className="flex items-center justify-center bg-slate-900 rounded-lg p-8 aspect-video max-w-full overflow-hidden">
+                      <div className="text-center text-white">
+                        <div className="text-xl font-bold">{standardRequest.resolution}</div>
+                        <div className="text-xs text-slate-400 mt-1">{standardRequest.aspectRatio}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Caption Preview */}
+              <div className="space-y-3 border-t pt-4">
+                <div className="text-xs font-medium text-muted-foreground">Caption Preview</div>
+                <div className="bg-slate-900 text-white rounded-lg p-3 text-center">
+                  <p className="text-xs leading-relaxed">
+                    "This is how your video captions will look using<br/>
+                    <span className="font-semibold">{imageProvider || "Selected"} Images</span> &amp;
+                    <span className="font-semibold"> {scriptProvider || "Selected"} Script</span>"
+                  </p>
+                </div>
+              </div>
+
+            {activeTab === "standard" ? (
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Platform</span>
+                  <span className="font-medium">{standardRequest.platform}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Style</span>
+                  <span className="font-medium">{standardRequest.style || "cinematic"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Format</span>
+                  <span className="font-medium">
+                    {standardRequest.resolution} / {standardRequest.aspectRatio}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Duration</span>
+                  <span className="font-medium">{standardRequest.targetDuration}s</span>
+                </div>
+              </div>
+            ) : null}
+
+            {activeTab === "content-images" ? (
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Segments</span>
+                  <span className="font-medium">{contentImageSegments.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Parsed Images</span>
+                  <span className="font-medium">{parsedContentImageCount}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Style</span>
+                  <span className="font-medium">{contentImagesRequest.style || "cinematic"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Format</span>
+                  <span className="font-medium">
+                    {contentImagesRequest.resolution} / {contentImagesRequest.aspectRatio}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+
+            {activeTab === "music-story" ? (
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Source</span>
+                  <span className="font-medium capitalize">{musicInputType}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Script Provider</span>
+                  <span className="font-medium">{musicRequest.scriptProvider || "openai"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Image Provider</span>
+                  <span className="font-medium">{musicRequest.imageProvider || "dalle"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">FPS</span>
+                  <span className="font-medium">{musicRequest.fps ?? 30}</span>
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
 
       {error ? (
         <StateMessage variant="destructive" title="Generation failed" message={error} />

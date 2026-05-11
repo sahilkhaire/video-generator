@@ -178,6 +178,17 @@ export class VideoController {
     return this.videoService.getActiveProviders();
   }
 
+  @Get('providers-models')
+  @ApiOperation({
+    summary: 'Get all available providers and their models',
+    description:
+      'Returns a complete list of supported providers and their available models. Useful for dynamic UI selection.',
+  })
+  @ApiResponse({ status: 200, description: 'Providers and models returned' })
+  getProvidersWithModels() {
+    return this.videoService.getAvailableProvidersWithModels();
+  }
+
   @Get('tts-voices')
   @ApiOperation({
     summary: 'List available TTS voices for the active provider',

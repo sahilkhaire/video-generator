@@ -31,6 +31,7 @@ import {
 import { ISceneAssets } from '../content/content.service';
 import { IVideoScript } from '../../domain/interfaces/script-generator.interface';
 import { EdgeTTSProvider } from '../content/providers/tts/edge-tts.provider';
+import { PROVIDERS_MODELS_CONFIG, ProvidersCatalogResponse } from '../../config/provider-models.config';
 
 export interface IVideoGenerationResult {
   video: IRenderedVideo;
@@ -253,6 +254,13 @@ export class VideoService {
 
   getActiveProviders(): { script: string; image: string; tts: string } {
     return this.contentService.getActiveProviders();
+  }
+
+  getAvailableProvidersWithModels(): ProvidersCatalogResponse {
+    return {
+      ...PROVIDERS_MODELS_CONFIG,
+      generatedAt: new Date().toISOString(),
+    };
   }
 
   getTtsVoices(): Promise<ITTSVoice[]> {

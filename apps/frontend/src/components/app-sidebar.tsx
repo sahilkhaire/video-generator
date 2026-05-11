@@ -1,8 +1,6 @@
 import * as React from "react"
 
-import { NavDocuments } from "@/components/nav-documents"
 import { NavMain } from "@/components/nav-main"
-import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
@@ -18,13 +16,10 @@ import {
   ListIcon,
   ChartBarIcon,
   UsersIcon,
-  CameraIcon,
-  Settings2Icon,
+  ClapperboardIcon,
+  ImagesIcon,
+  Music2Icon,
   CircleHelpIcon,
-  SearchIcon,
-  DatabaseIcon,
-  FileChartColumnIcon,
-  FolderOpenDotIcon,
   CommandIcon,
 } from "lucide-react"
 
@@ -36,27 +31,54 @@ export type AppView =
   | "costs"
   | "health"
 
+export type CreateVideoMode = "standard" | "content-images" | "music-story"
+
 type MainMenuSection = {
   label: string
   items: {
     key: AppView
     title: string
     icon: React.ReactNode
+    createMode?: CreateVideoMode
   }[]
 }
 
 const mainMenu: MainMenuSection[] = [
   {
-    label: "Create & Track",
+    label: "Create Video",
     items: [
       {
         key: "generate",
-        title: "Generate Video",
+        title: "Standard",
         icon: (
-          <CameraIcon
+          <ClapperboardIcon
           />
         ),
+        createMode: "standard",
       },
+      {
+        key: "generate",
+        title: "Content + Images",
+        icon: (
+          <ImagesIcon
+          />
+        ),
+        createMode: "content-images",
+      },
+      {
+        key: "generate",
+        title: "Music Story",
+        icon: (
+          <Music2Icon
+          />
+        ),
+        createMode: "music-story",
+      },
+    ],
+  },
+  {
+    label: "Create & Track",
+    items: [
       {
         key: "jobs",
         title: "Job Status",
@@ -118,67 +140,19 @@ const data = {
     avatar: "/avatars/shadcn.jpg",
   },
   navMain: mainMenu,
-  navSecondary: [
-    {
-      title: "Settings",
-      url: "#",
-      icon: (
-        <Settings2Icon
-        />
-      ),
-    },
-    {
-      title: "Get Help",
-      url: "#",
-      icon: (
-        <CircleHelpIcon
-        />
-      ),
-    },
-    {
-      title: "Search",
-      url: "#",
-      icon: (
-        <SearchIcon
-        />
-      ),
-    },
-  ],
-  documents: [
-    {
-      name: "Provider Catalog",
-      url: "#",
-      icon: (
-        <DatabaseIcon
-        />
-      ),
-    },
-    {
-      name: "Cost Reports",
-      url: "#",
-      icon: (
-        <FileChartColumnIcon
-        />
-      ),
-    },
-    {
-      name: "Artifacts",
-      url: "#",
-      icon: (
-        <FolderOpenDotIcon
-        />
-      ),
-    },
-  ],
 }
 
 export function AppSidebar({
   currentView,
   onViewChange,
+  activeCreateMode,
+  onCreateModeChange,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   currentView: AppView
   onViewChange: (view: AppView) => void
+  activeCreateMode: CreateVideoMode
+  onCreateModeChange: (mode: CreateVideoMode) => void
 }) {
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -191,7 +165,7 @@ export function AppSidebar({
             >
               <a href="#">
                 <CommandIcon className="size-5!" />
-                <span className="text-base font-semibold">Acme Inc.</span>
+                <span className="text-base font-semibold">Video Builder</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -201,10 +175,10 @@ export function AppSidebar({
         <NavMain
           items={data.navMain}
           activeItem={currentView}
+          activeCreateMode={activeCreateMode}
           onSelect={onViewChange}
+          onCreateModeChange={onCreateModeChange}
         />
-        <NavDocuments items={data.documents} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={data.user} />

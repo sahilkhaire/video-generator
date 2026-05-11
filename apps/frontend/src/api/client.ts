@@ -9,6 +9,8 @@ import {
   CostSummary,
   HealthStatus,
   MongoDetails,
+  ProviderToolGroup,
+  ProvidersModels,
 } from '../types/api';
 
 class APIClient {
@@ -116,6 +118,158 @@ class APIClient {
       .find((value) => Array.isArray(value));
 
     return Array.isArray(wrapped) ? (wrapped as Provider[]) : [];
+  }
+
+  private normalizeProvidersModels(payload: unknown): ProvidersModels {
+    const empty: ProvidersModels = {
+      script: [],
+      image: [],
+      tts: [],
+      tools: [],
+    };
+
+    if (!this.isRecord(payload)) {
+      return empty;
+    }
+
+    const readProviders = (value: unknown): ProvidersModels['script'] => {
+      if (!Array.isArray(value)) {
+        return [];
+      }
+
+      return value
+        .filter((item) => this.isRecord(item))
+        .map((item) => {
+          const models = Array.isArray(item.models)
+            ? item.models
+                .filter((model) => this.isRecord(model))
+                .map((model) => ({
+                  id: typeof model.id === 'string' ? model.id : '',
+                  name:
+                    typeof model.name === 'string'
+                      ? model.name
+                      : typeof model.id === 'string'
+                        ? model.id
+                        : '',
+                  displayName:
+                    typeof model.displayName === 'string'
+                      ? model.displayName
+                      : typeof model.name === 'string'
+                        ? model.name
+                        : typeof model.id === 'string'
+                          ? model.id
+                          : 'Unknown Model',
+                  isDefault: model.isDefault === true,
+                }))
+                .filter((model) => model.id)
+            : [];
+
+          const name = typeof item.name === 'string' ? item.name : '';
+
+          return {
+            name,
+            displayName:
+              typeof item.displayName === 'string'
+                ? item.displayName
+                : name || 'Unknown Provider',
+            description: typeof item.description === 'string' ? item.description : undefined,
+            isDefault: item.isDefault === true,
+            models,
+          };
+        })
+        .filter((provider) => provider.name);
+    };
+
+    const script = readProviders(payload.script);
+    const image = readProviders(payload.image);
+    const tts = readProviders(payload.tts);
+
+    const normalizeToolId = (value: unknown): 'script' | 'image' | 'tts' => {
+      if (value === 'script' || value === 'image' || value === 'tts') {
+        return value;
+      }
+      return 'script';
+    };
+
+    const tools: ProviderToolGroup[] = Array.isArray(payload.tools)
+      ? payload.tools
+          .filter((tool) => this.isRecord(tool))
+          .map((tool) => ({
+            id: normalizeToolId(tool.id),
+            displayName:
+              typeof tool.displayName === 'string' ? tool.displayName : 'Tool Group',
+            description: typeof tool.description === 'string' ? tool.description : '',
+            providers: readProviders(tool.providers),
+          }))
+      : [
+          {
+            id: 'script' as const,
+            displayName: 'LLM (Script Generation)',
+            description: 'Text generation providers',
+            providers: script,
+          },
+          {
+            id: 'image' as const,
+            displayName: 'Image Generation',
+            description: 'Image generation providers',
+            providers: image,
+          },
+          {
+            id: 'tts' as const,
+            displayName: 'Text-to-Speech',
+            description: 'Audio generation providers',
+            providers: tts,
+          },
+        ];
+
+    return {
+      version: typeof payload.version === 'string' ? payload.version : undefined,
+      generatedAt: typeof payload.generatedAt === 'string' ? payload.generatedAt : undefined,
+      defaults: this.isRecord(payload.defaults)
+        ? {
+            script: this.isRecord(payload.defaults.script)
+              ? {
+                  provider:
+                    typeof payload.defaults.script.provider === 'string'
+                      ? payload.defaults.script.provider
+                      : '',
+                  model:
+                    typeof payload.defaults.script.model === 'string'
+                      ? payload.defaults.script.model
+                      : '',
+                }
+              : undefined,
+            image: this.isRecord(payload.defaults.image)
+              ? {
+                  provider:
+                    typeof payload.defaults.image.provider === 'string'
+                      ? payload.defaults.image.provider
+                      : '',
+                  model:
+                    typeof payload.defaults.image.model === 'string'
+                      ? payload.defaults.image.model
+                      : '',
+                }
+              : undefined,
+            tts: this.isRecord(payload.defaults.tts)
+              ? {
+                  provider:
+                    typeof payload.defaults.tts.provider === 'string'
+                      ? payload.defaults.tts.provider
+                      : '',
+                  model:
+                    typeof payload.defaults.tts.model === 'string'
+                      ? payload.defaults.tts.model
+                      : '',
+                }
+              : undefined,
+          }
+        : undefined,
+      tools,
+      script,
+      image,
+      tts,
+    };
   }
 
   private normalizeCostSummary(payload: unknown): CostSummary {
@@ -374,6 +528,12 @@ class APIClient {
   async getProviders(): Promise<Provider[]> {
     const { data } = await this.client.get('/videos/providers');
     return this.normalizeProviders(data);
+  }
+
+  // Providers and Models endpoint
+  async getProvidersModels(): Promise<ProvidersModels> {
+    const { data } = await this.client.get('/videos/providers-models');
+    return this.normalizeProvidersModels(data);
   }
 
   // TTS Voices endpoint

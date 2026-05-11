@@ -1,6 +1,10 @@
 import * as React from "react"
 
-import { AppSidebar, type AppView } from "@/components/app-sidebar"
+import {
+  AppSidebar,
+  type AppView,
+  type CreateVideoMode,
+} from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
@@ -21,13 +25,38 @@ const VALID_VIEWS: AppView[] = [
   "health",
 ]
 
+const VALID_CREATE_MODES: CreateVideoMode[] = [
+  "standard",
+  "content-images",
+  "music-story",
+]
+
 const isAppView = (value: string): value is AppView => {
   return VALID_VIEWS.includes(value as AppView)
 }
 
-const getViewFromHash = (hash: string): AppView => {
+const isCreateVideoMode = (value: string): value is CreateVideoMode => {
+  return VALID_CREATE_MODES.includes(value as CreateVideoMode)
+}
+
+const parseHashState = (hash: string): {
+  view: AppView
+  createMode: CreateVideoMode
+} => {
   const candidate = hash.replace(/^#/, "")
-  return isAppView(candidate) ? candidate : "overview"
+  const [viewCandidate, modeCandidate] = candidate.split("/")
+
+  const view = isAppView(viewCandidate) ? viewCandidate : "overview"
+  const createMode =
+    view === "generate" && modeCandidate && isCreateVideoMode(modeCandidate)
+      ? modeCandidate
+      : "standard"
+
+  return { view, createMode }
+}
+
+const buildHash = (view: AppView, createMode: CreateVideoMode): string => {
+  return view === "generate" ? `#generate/${createMode}` : `#${view}`
 }
 
 function App() {
@@ -36,7 +65,14 @@ function App() {
       return "overview"
     }
 
-    return getViewFromHash(window.location.hash)
+    return parseHashState(window.location.hash).view
+  })
+  const [currentCreateMode, setCurrentCreateMode] = React.useState<CreateVideoMode>(() => {
+    if (typeof window === "undefined") {
+      return "standard"
+    }
+
+    return parseHashState(window.location.hash).createMode
   })
 
   const layoutStyle = {
@@ -55,7 +91,9 @@ function App() {
 
   React.useEffect(() => {
     const syncViewWithHash = () => {
-      setCurrentView(getViewFromHash(window.location.hash))
+      const { view, createMode } = parseHashState(window.location.hash)
+      setCurrentView(view)
+      setCurrentCreateMode(createMode)
     }
 
     syncViewWithHash()
@@ -69,9 +107,19 @@ function App() {
   const handleViewChange = React.useCallback((view: AppView) => {
     setCurrentView(view)
 
-    const nextHash = `#${view}`
+    const nextHash = buildHash(view, currentCreateMode)
     if (window.location.hash !== nextHash) {
-      window.location.hash = view
+      window.location.hash = nextHash
+    }
+  }, [currentCreateMode])
+
+  const handleCreateModeChange = React.useCallback((mode: CreateVideoMode) => {
+    setCurrentCreateMode(mode)
+    setCurrentView("generate")
+
+    const nextHash = buildHash("generate", mode)
+    if (window.location.hash !== nextHash) {
+      window.location.hash = nextHash
     }
   }, [])
 
@@ -81,7 +129,9 @@ function App() {
         <AppSidebar
           variant="inset"
           currentView={currentView}
+          activeCreateMode={currentCreateMode}
           onViewChange={handleViewChange}
+          onCreateModeChange={handleCreateModeChange}
         />
         <SidebarInset>
           <SiteHeader title={titleByView[currentView]} />
@@ -99,7 +149,10 @@ function App() {
                 {currentView === "overview" && <DashboardOverview />}
                 {currentView === "generate" && (
                   <div className="px-4 lg:px-6">
-                    <GenerateVideoPage />
+                    <GenerateVideoPage
+                      initialTab={currentCreateMode}
+                      onTabChange={handleCreateModeChange}
+                    />
                   </div>
                 )}
                 {currentView === "jobs" && (
